@@ -1,5 +1,3 @@
-const { setupDevPlatform } = require('@cloudflare/next-on-pages/next-dev');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@otak-jinro/shared'],
@@ -25,12 +23,5 @@ const nextConfig = {
     return config;
   },
 };
-
-// Here we use the @cloudflare/next-on-pages next-dev module to allow us to use bindings during local development
-// (when running the application with `next dev`), for more information see:
-// https://github.com/cloudflare/next-on-pages/blob/main/packages/next-on-pages/docs/README.md#develop-your-application-locally
-if (process.env.NODE_ENV === 'development') {
-  setupDevPlatform();
-}
 
 module.exports = nextConfig;
