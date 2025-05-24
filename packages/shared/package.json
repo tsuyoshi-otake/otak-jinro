@@ -1,0 +1,20 @@
+{
+  "name": "@otak-jinro/shared",
+  "version": "1.0.0",
+  "description": "共通型定義とユーティリティ",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "rimraf": "^5.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}

@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ゲーム専用スタイル */
+@layer components {
+  .role-werewolf {
+    @apply bg-werewolf text-werewolf-foreground;
+  }
+  
+  .role-villager {
+    @apply bg-villager text-villager-foreground;
+  }
+  
+  .role-seer {
+    @apply bg-seer text-seer-foreground;
+  }
+  
+  .role-medium {
+    @apply bg-medium text-medium-foreground;
+  }
+  
+  .role-hunter {
+    @apply bg-hunter text-hunter-foreground;
+  }
+  
+  .role-madman {
+    @apply bg-madman text-madman-foreground;
+  }
+
+  .game-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg;
+  }
+
+  .game-button {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background;
+  }
+
+  .game-button-primary {
+    @apply game-button bg-primary text-primary-foreground hover:bg-primary/90 h-10 py-2 px-4;
+  }
+
+  .game-button-secondary {
+    @apply game-button bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 py-2 px-4;
+  }
+
+  .game-button-destructive {
+    @apply game-button bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 py-2 px-4;
+  }
+
+  .chat-message {
+    @apply p-3 rounded-lg mb-2 animate-fade-in;
+  }
+
+  .chat-message-public {
+    @apply chat-message bg-card/60;
+  }
+
+  .chat-message-werewolf {
+    @apply chat-message bg-werewolf/20 border border-werewolf/30;
+  }
+
+  .chat-message-system {
+    @apply chat-message bg-muted/60 text-muted-foreground text-center italic;
+  }
+
+  .player-avatar {
+    @apply relative inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full border-2;
+  }
+
+  .player-avatar-alive {
+    @apply border-green-500;
+  }
+
+  .player-avatar-dead {
+    @apply border-red-500 opacity-50 grayscale;
+  }
+
+  .phase-indicator {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .phase-day {
+    @apply phase-indicator bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+  }
+
+  .phase-night {
+    @apply phase-indicator bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+  }
+
+  .phase-voting {
+    @apply phase-indicator bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+  }
+
+  .phase-ended {
+    @apply phase-indicator bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200;
+  }
+
+  .timer-warning {
+    @apply animate-pulse-glow;
+  }
+}
+
+/* カスタムスクロールバー */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground));
+}
+
+/* アニメーション */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* フェードインアニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* カスタムスクロールバー for チャット */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-white\/20 {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* Webkit browsers */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 640px) {
+  .game-card {
+    @apply mx-2;
+  }
+  
+  .chat-message {
+    @apply p-2 text-sm;
+  }
+  
+  .player-avatar {
+    @apply h-8 w-8;
+  }
+}

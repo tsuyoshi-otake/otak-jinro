@@ -1,0 +1,35 @@
+name = "otak-jinro-workers"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production]
+name = "otak-jinro-workers"
+
+[env.staging]
+name = "otak-jinro-workers-staging"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "GAME_ROOMS"
+class_name = "GameRoom"
+
+# Durable Objects Migrations
+[[migrations]]
+tag = "v1"
+new_classes = [ "GameRoom" ]
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "PLAYER_DATA"
+id = "9e01ad23ddb04f289d0614e8a4a018f8"
+preview_id = "d71e2801a36f4359b196277a2990cf96"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "development"
+CORS_ORIGIN = "*"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+CORS_ORIGIN = "https://otak-jinro.pages.dev"
