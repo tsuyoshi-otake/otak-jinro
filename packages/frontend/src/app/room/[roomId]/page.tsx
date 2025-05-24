@@ -64,6 +64,29 @@ export default function RoomPage() {
   const [aiPersonalities, setAiPersonalities] = useState<Map<string, any>>(new Map())
   const [showGameEndModal, setShowGameEndModal] = useState(false)
   const [gameResult, setGameResult] = useState<{winner: string, survivors: Player[]} | null>(null)
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // エラー表示を遅延させる関数
+  const setDelayedError = (errorMessage: string) => {
+    // 既存のタイマーをクリア
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current)
+    }
+    
+    // 1秒後にエラーを表示
+    errorTimeoutRef.current = setTimeout(() => {
+      setError(errorMessage)
+    }, 1000)
+  }
+
+  // エラーをクリアする関数
+  const clearDelayedError = () => {
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current)
+      errorTimeoutRef.current = null
+    }
+    setError(null)
+  }
 
   // タイマーの実装
   useEffect(() => {
@@ -386,7 +409,7 @@ ${recentMessages}
           console.log('Player name from URL:', playerName)
           console.log('Room ID:', roomId)
           setIsConnected(true)
-          setError(null)
+          clearDelayedError()
           
           // ルーム参加メッセージを送信
           const joinMessage = {
@@ -496,14 +519,14 @@ ${recentMessages}
 
         ws.onerror = (error) => {
           console.error('WebSocketエラー:', error)
-          setError('接続エラーが発生しました')
+          setDelayedError('接続エラーが発生しました')
           setIsConnected(false)
         }
 
         return ws
       } catch (err) {
         console.error('WebSocket接続失敗:', err)
-        setError('WebSocket接続に失敗しました')
+        setDelayedError('WebSocket接続に失敗しました')
         return null
       }
     }
@@ -516,6 +539,10 @@ ${recentMessages}
     return () => {
       if (ws) {
         ws.close()
+      }
+      // エラータイマーもクリア
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current)
       }
     }
   }, [roomId, playerName])
@@ -579,7 +606,7 @@ ${recentMessages}
       setIsSendingMessage(false)
     } else {
       console.error('WebSocket is not connected')
-      setError('WebSocket接続が切断されています')
+      setDelayedError('WebSocket接続が切断されています')
       setIsSendingMessage(false)
     }
   }
@@ -1118,7 +1145,7 @@ ${recentMessages}
                               websocket.send(JSON.stringify(startGameMessage))
                             } else {
                               console.error('WebSocket is not connected')
-                              setError('WebSocket接続が切断されています')
+                              setDelayedError('WebSocket接続が切断されています')
                             }
                           }}
                           className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md transition-colors"
