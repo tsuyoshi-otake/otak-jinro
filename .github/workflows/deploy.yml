@@ -1,44 +1,90 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to Cloudflare
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, staging ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
-    name: Deploy
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test
+    
+    - name: Type check
+      run: npm run type-check
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
+  deploy-workers:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Deploy Workers (Staging)
+      if: github.ref == 'refs/heads/staging'
+      run: |
+        cd packages/workers
+        npx wrangler deploy --env staging
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    
+    - name: Deploy Workers (Production)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cd packages/workers
+        npx wrangler deploy --env production
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: |
-          cd packages/frontend
-          npm run build
-
-      - name: Build with @cloudflare/next-on-pages
-        run: |
-          cd packages/frontend
-          npx @cloudflare/next-on-pages
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: otak-jinro-game
-          directory: packages/frontend/.vercel/output/static
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+  deploy-pages:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build Frontend
+      run: |
+        cd packages/frontend
+        npm run build
+    
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        projectName: otak-jinro-game
+        directory: packages/frontend/.next
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}

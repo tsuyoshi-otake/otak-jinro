@@ -11,6 +11,7 @@ Next.js + Cloudflare Workers を使用したリアルタイム人狼ゲーム
 - [開発環境](#開発環境)
 - [API仕様](#api仕様)
 - [ゲーム仕様](#ゲーム仕様)
+- [デプロイ](#デプロイ)
 - [トラブルシューティング](#トラブルシューティング)
 - [開発ログ](#開発ログ)
 
@@ -513,6 +514,199 @@ PBTの詳細な使用方法については [`docs/PBT_GUIDE.md`](docs/PBT_GUIDE.
 - 新機能追加時のPBTテスト作成
 - パフォーマンステストの追加検討
 
+## デプロイ
+
+### 手動デプロイ
+
+#### 前提条件
+- Cloudflareアカウントとログイン済みのwrangler CLI
+- プロジェクトへのデプロイ権限
+
+#### 1. Cloudflare Workersのデプロイ
+```powershell
+# workersディレクトリに移動
+cd packages/workers
+
+# 開発環境にデプロイ
+npm run deploy
+
+# 本番環境にデプロイ
+wrangler deploy --env production
+```
+
+#### 2. Cloudflare Pagesのデプロイ
+```powershell
+# frontendディレクトリに移動
+cd packages/frontend
+
+# ビルド
+npm run build
+
+# Cloudflare Pagesにデプロイ
+npx wrangler pages deploy .next --project-name otak-jinro-game
+```
+
+#### 3. 一括デプロイスクリプト
+```powershell
+# ルートディレクトリから実行
+# 1. 全体ビルド
+npm run build
+
+# 2. Workersデプロイ
+cd packages/workers && npm run deploy
+
+# 3. Frontendデプロイ
+cd ../frontend && npm run build && npx wrangler pages deploy .next --project-name otak-jinro-game
+
+# 4. ルートに戻る
+cd ../..
+```
+
+### 自動デプロイ（GitHub Actions）
+
+#### 設定ファイル
+プロジェクトルートに `.github/workflows/deploy.yml` を作成：
+
+```yaml
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [ main, staging ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test
+    
+    - name: Type check
+      run: npm run type-check
+
+  deploy-workers:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Deploy Workers (Staging)
+      if: github.ref == 'refs/heads/staging'
+      run: |
+        cd packages/workers
+        npx wrangler deploy --env staging
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    
+    - name: Deploy Workers (Production)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cd packages/workers
+        npx wrangler deploy --env production
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-pages:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build Frontend
+      run: |
+        cd packages/frontend
+        npm run build
+    
+    - name: Deploy to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        projectName: otak-jinro-game
+        directory: packages/frontend/.next
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+```
+
+#### GitHub Secrets設定
+リポジトリの Settings > Secrets and variables > Actions で以下を設定：
+
+- `CLOUDFLARE_API_TOKEN`: CloudflareのAPIトークン
+- `CLOUDFLARE_ACCOUNT_ID`: CloudflareのアカウントID
+
+#### デプロイフロー
+1. **staging ブランチ**: ステージング環境に自動デプロイ
+2. **main ブランチ**: 本番環境に自動デプロイ
+3. **Pull Request**: テストのみ実行
+
+### デプロイ状況確認
+
+#### Cloudflare Workers
+```powershell
+cd packages/workers
+wrangler deployments list
+```
+
+#### Cloudflare Pages
+```powershell
+wrangler pages deployment list --project-name otak-jinro-game
+```
+
+### 現在のデプロイ先
+
+#### 本番環境
+- **Workers**: https://otak-jinro-workers.systemexe-research-and-development.workers.dev
+- **Frontend**: https://otak-jinro-game.pages.dev
+
+#### 最新デプロイ
+- **Workers**: 2025/05/24 18:42 JST (Version: 9dcd3fbf-8360-4a06-aac4-b2db758c9eb6)
+- **Frontend**: 2025/05/24 18:43 JST (https://07b29bd0.otak-jinro-game.pages.dev)
+
+### 環境変数設定
+
+#### 本番環境用環境変数
+```bash
+# Workers (wrangler.toml で設定済み)
+ENVIRONMENT=production
+CORS_ORIGIN=https://otak-jinro-game.pages.dev
+
+# Frontend (.env.production)
+NEXT_PUBLIC_WORKERS_URL=https://otak-jinro-workers.systemexe-research-and-development.workers.dev
+NEXT_PUBLIC_WS_URL=wss://otak-jinro-workers.systemexe-research-and-development.workers.dev
+```
+
 ## トラブルシューティング
 
 ### よくある問題
@@ -868,6 +1062,68 @@ export function getExecutionTarget(votes: Vote[]): string | null;
 - [ ] E2Eテスト環境構築
 - [ ] パフォーマンステスト実装
 
+### 2025/05/24 - Cloudflare再デプロイ & 自動化設定
+
+#### 実装内容
+1. **Cloudflareへの再デプロイ実行**
+   - **Workers**: https://otak-jinro-workers.systemexe-research-and-development.workers.dev
+   - **Frontend**: https://07b29bd0.otak-jinro-game.pages.dev (最新デプロイ)
+   - 両方とも正常にデプロイ完了
+
+2. **デプロイ手順の文書化**
+   - README.mdに詳細なデプロイ手順を追加
+   - 手動デプロイとGitHub Actions自動デプロイの両方をカバー
+   - 環境別（staging/production）のデプロイ方法を明記
+
+3. **GitHub Actions自動デプロイ設定**
+   - `.github/workflows/deploy.yml` 作成
+   - テスト → デプロイの自動化フロー
+   - staging/mainブランチでの環境別デプロイ
+   - 必要なSecrets設定の説明
+
+4. **デプロイスクリプト作成**
+   - `deploy.ps1`: PowerShell用の包括的デプロイスクリプト
+   - エラーハンドリング、テスト実行、型チェック含む
+   - staging/production環境の選択可能
+   - デプロイ状況確認機能付き
+
+5. **環境設定の改善**
+   - `.env.production`: 本番環境用環境変数
+   - package.jsonにデプロイコマンド追加
+   - 環境別設定の明確化
+
+#### 新しいコマンド
+```powershell
+# 本番環境デプロイ
+npm run deploy
+
+# ステージング環境デプロイ
+npm run deploy:staging
+
+# 直接スクリプト実行
+powershell -ExecutionPolicy Bypass -File deploy.ps1 production
+powershell -ExecutionPolicy Bypass -File deploy.ps1 staging
+```
+
+#### GitHub Actions設定
+- **必要なSecrets**:
+  - `CLOUDFLARE_API_TOKEN`
+  - `CLOUDFLARE_ACCOUNT_ID`
+- **自動デプロイトリガー**:
+  - `main`ブランチ → 本番環境
+  - `staging`ブランチ → ステージング環境
+
+#### デプロイ状況
+- **Workers**: Version 9dcd3fbf-8360-4a06-aac4-b2db758c9eb6 (2025/05/24 18:42 JST)
+- **Frontend**: 新規デプロイ完了 (2025/05/24 18:43 JST)
+- **総アップロードファイル**: 92ファイル (41新規、51既存)
+
+#### 技術的改善
+- **自動化**: 手動デプロイから自動デプロイへの移行準備
+- **品質保証**: デプロイ前のテスト・型チェック必須化
+- **環境分離**: staging/production環境の明確な分離
+- **監視**: デプロイ状況確認コマンドの提供
+
 ---
 
-**最終更新**: 2025/05/24 18:09 JST
+**最終更新**: 2025/05/24 18:46 JST

@@ -14,7 +14,9 @@
     "type-check": "turbo run type-check",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
-    "test:coverage": "turbo run test:coverage"
+    "test:coverage": "turbo run test:coverage",
+    "deploy": "powershell -ExecutionPolicy Bypass -File deploy.ps1 production",
+    "deploy:staging": "powershell -ExecutionPolicy Bypass -File deploy.ps1 staging"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
