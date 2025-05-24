@@ -1,11 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function HomePage() {
   const [roomId, setRoomId] = useState('')
   const [playerName, setPlayerName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // コンポーネントマウント時に保存されたプレイヤー名を読み込み
+  useEffect(() => {
+    const savedPlayerName = localStorage.getItem('otak-jinro-player-name')
+    if (savedPlayerName) {
+      setPlayerName(savedPlayerName)
+    }
+  }, [])
+
+  // プレイヤー名が変更されたときにlocalStorageに保存
+  const handlePlayerNameChange = (name: string) => {
+    setPlayerName(name)
+    if (name.trim()) {
+      localStorage.setItem('otak-jinro-player-name', name.trim())
+    } else {
+      localStorage.removeItem('otak-jinro-player-name')
+    }
+  }
 
   const handleCreateRoom = async () => {
     if (!playerName.trim()) {
@@ -88,7 +106,7 @@ export default function HomePage() {
       <div className="w-full max-w-md space-y-8">
         {/* ヘッダー */}
         <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold text-white">🌙 Otak Jinro ☀️</h1>
+          <h1 className="text-4xl font-bold text-white">otak-jinro</h1>
           <p className="text-lg text-gray-300">
             リアルタイムオンライン人狼ゲーム
           </p>
@@ -111,19 +129,26 @@ export default function HomePage() {
                 type="text"
                 placeholder="あなたの名前を入力"
                 value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
+                onChange={(e) => handlePlayerNameChange(e.target.value)}
                 maxLength={20}
                 className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
+            {/* プレイヤー名が入力されていない場合の注意メッセージ */}
+            {!playerName.trim() && (
+              <div className="text-center text-yellow-400 text-sm bg-yellow-400/10 border border-yellow-400/20 rounded-md p-2">
+                プレイヤー名を入力してください
+              </div>
+            )}
+
             {/* ルーム作成 */}
-            <button 
+            <button
               onClick={handleCreateRoom}
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50"
+              disabled={isLoading || !playerName.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? '作成中...' : '🏠 ルームを作成'}
+              {isLoading ? '作成中...' : 'ルームを作成'}
             </button>
 
             <div className="text-center text-gray-400">または</div>
@@ -139,14 +164,15 @@ export default function HomePage() {
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                 maxLength={6}
-                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase"
+                disabled={!playerName.trim()}
+                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
-            <button 
+            <button
               onClick={handleJoinRoom}
-              disabled={isLoading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50"
+              disabled={isLoading || !playerName.trim() || !roomId.trim()}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? '参加中...' : '🚪 ルームに参加'}
             </button>

@@ -15,6 +15,12 @@ import {
 
 import { DurableObject, DurableObjectState, Env, CloudflareWebSocket } from './types';
 
+// AI名前の定数
+const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
+
+// AIプレイヤーかどうかを判定する関数
+const isAIPlayer = (playerName: string) => AI_NAMES.includes(playerName);
+
 export class GameRoom implements DurableObject {
   private state: DurableObjectState;
   private gameState: GameState | null = null;
@@ -583,9 +589,22 @@ export class GameRoom implements DurableObject {
   private startPhaseTimer() {
     if (!this.gameState) return;
 
-    const duration = this.gameState.phase === 'day' 
-      ? this.gameState.gameSettings.dayDuration
-      : this.gameState.gameSettings.nightDuration;
+    let duration: number;
+    switch (this.gameState.phase) {
+      case 'day':
+        duration = this.gameState.gameSettings.dayDuration;
+        break;
+      case 'voting':
+        duration = this.gameState.gameSettings.votingDuration;
+        break;
+      case 'night':
+        duration = this.gameState.gameSettings.nightDuration;
+        break;
+      default:
+        return; // ロビーやendedフェーズではタイマーを設定しない
+    }
+
+    console.log(`⏰ [タイマー設定] ${this.gameState.phase}フェーズ: ${duration}秒`);
 
     const timerId = setTimeout(() => {
       this.nextPhase();
@@ -601,24 +620,62 @@ export class GameRoom implements DurableObject {
       case 'day':
         this.gameState.phase = 'voting';
         this.gameState.timeRemaining = this.gameState.gameSettings.votingDuration;
+        console.log(`[フェーズ変更] 昼 → 投票フェーズ開始 (${this.gameState.timeRemaining}秒)`);
+        // AIプレイヤーの自動投票を開始
+        this.scheduleAIVoting();
         break;
       case 'voting':
         await this.processVoting();
         this.gameState.phase = 'night';
         this.gameState.timeRemaining = this.gameState.gameSettings.nightDuration;
+        console.log(`[フェーズ変更] 投票 → 夜フェーズ開始 (${this.gameState.timeRemaining}秒)`);
+        // AIプレイヤーの自動能力使用を開始
+        this.scheduleAINightActions();
         break;
       case 'night':
         await this.processNight();
         this.gameState.phase = 'day';
         this.gameState.currentDay++;
         this.gameState.timeRemaining = this.gameState.gameSettings.dayDuration;
+        console.log(`[フェーズ変更] 夜 → 昼フェーズ開始 (${this.gameState.currentDay}日目, ${this.gameState.timeRemaining}秒)`);
         break;
     }
 
     const winner = checkWinCondition(this.gameState.players);
     if (winner) {
       this.gameState.phase = 'ended';
-      // ゲーム終了処理
+      
+      // ゲーム終了ログ
+      console.log(`[ゲーム終了] ${winner}チームの勝利！`);
+      
+      // 勝利メッセージをチャットに追加
+      const winMessage = {
+        id: crypto.randomUUID(),
+        playerId: 'system',
+        playerName: 'System',
+        content: `🎉 ゲーム終了！ ${winner}チームの勝利です！`,
+        timestamp: Date.now(),
+        type: 'system' as const
+      };
+      this.gameState.chatMessages.push(winMessage);
+      
+      // 全プレイヤーの役職を公開
+      const roleRevealMessage = {
+        id: crypto.randomUUID(),
+        playerId: 'system',
+        playerName: 'System',
+        content: `📋 役職公開: ${this.gameState.players.map(p =>
+          `${p.name}(${p.role === 'villager' ? '村人' :
+            p.role === 'werewolf' ? '人狼' :
+            p.role === 'seer' ? '占い師' :
+            p.role === 'medium' ? '霊媒師' :
+            p.role === 'hunter' ? '狩人' :
+            p.role === 'madman' ? '狂人' : p.role})`
+        ).join(', ')}`,
+        timestamp: Date.now(),
+        type: 'system' as const
+      };
+      this.gameState.chatMessages.push(roleRevealMessage);
     }
 
     this.gameState.updatedAt = Date.now();
@@ -840,7 +897,7 @@ export class GameRoom implements DurableObject {
     if (!this.gameState) return;
     
     // AIプレイヤーのみ抽出
-    const aiPlayers = this.gameState.players.filter(p => p.name.startsWith('AI-') && p.isAlive);
+    const aiPlayers = this.gameState.players.filter(p => isAIPlayer(p.name) && p.isAlive);
     
     if (aiPlayers.length === 0) return;
     
@@ -853,8 +910,8 @@ export class GameRoom implements DurableObject {
   private scheduleAIChat(aiPlayer: Player) {
     if (!this.gameState || this.gameState.phase === 'ended') return;
     
-    // 10-30秒のランダムな間隔
-    const delay = Math.floor(Math.random() * 20000) + 10000;
+    // 15-45秒のランダムな間隔（より頻繁に）
+    const delay = Math.floor(Math.random() * 30000) + 15000;
     
     setTimeout(() => {
       if (!this.gameState || this.gameState.phase === 'ended' || !aiPlayer.isAlive) return;
@@ -873,8 +930,13 @@ export class GameRoom implements DurableObject {
       this.gameState.chatMessages.push(chatMessage);
       this.gameState.updatedAt = Date.now();
       
+      console.log(`[AI自発会話] ${aiPlayer.name}: ${message}`);
+      
       this.saveGameState();
       this.broadcastGameState();
+      
+      // AI発言に対して他のAIが反応する可能性
+      this.triggerAIResponse(chatMessage);
       
       // 次のメッセージをスケジュール
       this.scheduleAIChat(aiPlayer);
@@ -888,10 +950,27 @@ export class GameRoom implements DurableObject {
     // 文脈に応じた返答
     if (context) {
       const content = context.content.toLowerCase();
+      const speaker = context.playerName;
       const isTargeted = content.includes(aiPlayer.name.toLowerCase()) ||
                         content.includes('ai-') ||
                         content.includes('全員') ||
                         content.includes('みんな');
+      
+      // 他のAIの発言に対する反応パターンを追加
+      if (isAIPlayer(speaker) && speaker !== aiPlayer.name) {
+        // AI同士の会話を促進
+        if (content.includes('人狼') || content.includes('怪しい')) {
+          return this.getAIToAIResponse(aiPlayer, speaker, 'suspicion');
+        }
+        if (content.includes('信じ') || content.includes('味方')) {
+          return this.getAIToAIResponse(aiPlayer, speaker, 'trust');
+        }
+        if (content.includes('どう思') || content.includes('意見')) {
+          return this.getAIToAIResponse(aiPlayer, speaker, 'opinion');
+        }
+        // 一般的な同意・反対
+        return this.getAIToAIResponse(aiPlayer, speaker, 'general');
+      }
       
       if (isTargeted) {
         // 疑われている場合の反応
@@ -915,42 +994,64 @@ export class GameRoom implements DurableObject {
       }
     }
     
-    // フェーズと役職に応じたメッセージのパターン
+    // 戦略的で具体的なメッセージパターン
+    const alivePlayers = this.gameState?.players.filter(p => p.isAlive && p.id !== aiPlayer.id) || [];
+    const suspiciousPlayer = alivePlayers[Math.floor(Math.random() * alivePlayers.length)]?.name || 'someone';
+    
     const messages: { [key: string]: string[] } = {
-      day_villager: [
-        '誰が人狼か分からないな...',
-        'みんなで協力して人狼を見つけよう！',
-        '怪しい人はいないかな？',
-        '昨夜は何も起きなかったみたい',
-        '誰を信じればいいんだろう'
+      day_villager: (this.gameState?.currentDay || 1) === 1 ? [
+        `${suspiciousPlayer}の発言が気になる。どう思う？`,
+        `${suspiciousPlayer}は人狼の可能性が高い。直感だが怪しい。`,
+        `${suspiciousPlayer}の反応が不自然だった。詳しく説明してほしい。`,
+        `みんなで協力して人狼を見つけよう。${suspiciousPlayer}が怪しいと思う。`,
+        `${suspiciousPlayer}の言動に違和感がある。みんなはどう思う？`
+      ] : [
+        `${suspiciousPlayer}の昨日の投票行動が気になる。理由を聞きたい。`,
+        `${suspiciousPlayer}は人狼の可能性が高い。発言に矛盾がある。`,
+        `昨夜の襲撃パターンから、${suspiciousPlayer}が怪しいと推理している。`,
+        `${suspiciousPlayer}の反応が不自然だった。詳しく説明してほしい。`,
+        `投票の流れを見ると、${suspiciousPlayer}が誘導している可能性がある。`
       ],
-      day_werewolf: [
-        '私は村人だよ！',
-        'みんなで人狼を探そう',
-        '誰か怪しい人はいる？',
-        '昨夜は怖かったな...',
-        '村人として頑張るよ'
+      day_werewolf: (this.gameState?.currentDay || 1) === 1 ? [
+        `${suspiciousPlayer}の推理は鋭すぎる。占い師かもしれない。`,
+        `村人として、${suspiciousPlayer}の発言に違和感を覚える。`,
+        `${suspiciousPlayer}が人狼の可能性を疑っている。証拠はないが。`,
+        `${suspiciousPlayer}の言動が気になる。慎重に見極めたい。`,
+        `${suspiciousPlayer}の発言パターンが怪しいと感じる。`
+      ] : [
+        `${suspiciousPlayer}の推理は鋭すぎる。占い師かもしれない。`,
+        `村人として、${suspiciousPlayer}の発言に違和感を覚える。`,
+        `${suspiciousPlayer}が人狼の可能性を疑っている。証拠はないが。`,
+        `昨夜の襲撃を避けられた${suspiciousPlayer}が怪しい。`,
+        `${suspiciousPlayer}の投票パターンが一貫していない。要注意だ。`
       ],
-      day_seer: [
-        '占い結果を共有すべきかな...',
-        'みんなの意見を聞きたい',
-        '慎重に行動しないと',
-        '誰を占うべきか悩むな',
-        '重要な情報があるかも'
+      day_seer: (this.gameState?.currentDay || 1) === 1 ? [
+        `占い結果を公開する。${suspiciousPlayer}は${Math.random() < 0.3 ? '人狼' : '村人'}だった。`,
+        `${suspiciousPlayer}を占った理由は、発言が気になったから。`,
+        `占い師として断言する。${suspiciousPlayer}は信用できない。`,
+        `重要な情報がある。${suspiciousPlayer}の正体について話したい。`
+      ] : [
+        `占い結果を公開する。${suspiciousPlayer}は${Math.random() < 0.3 ? '人狼' : '村人'}だった。`,
+        `${suspiciousPlayer}を占った理由は、発言の矛盾が気になったから。`,
+        `占い師として断言する。${suspiciousPlayer}は信用できない。`,
+        `重要な情報がある。${suspiciousPlayer}の正体について話したい。`
       ],
-      voting_all: [
-        '投票の時間だ',
-        '誰に投票しようかな',
-        'よく考えて投票しよう',
-        '間違えたくないな',
-        '難しい選択だ...'
+      voting_all: (this.gameState?.currentDay || 1) === 1 ? [
+        `${suspiciousPlayer}に投票する。理由は今日の発言パターンだ。`,
+        `証拠は少ないが、${suspiciousPlayer}が最も怪しいと判断する。`,
+        `消去法で考えると、${suspiciousPlayer}が人狼の可能性が高い。`,
+        `${suspiciousPlayer}の弁明を聞いてから最終判断したい。`
+      ] : [
+        `${suspiciousPlayer}に投票する。理由は昨日からの行動パターンだ。`,
+        `証拠は少ないが、${suspiciousPlayer}が最も怪しいと判断する。`,
+        `消去法で考えると、${suspiciousPlayer}が人狼の可能性が高い。`,
+        `${suspiciousPlayer}の弁明を聞いてから最終判断したい。`
       ],
       night_all: [
-        '夜が来た...',
-        '静かな夜だ',
-        '朝が待ち遠しい',
-        '何か起きそうな予感',
-        '無事に朝を迎えたい'
+        '明日は重要な議論になりそうだ。',
+        '今夜の襲撃で状況が変わるかもしれない。',
+        '人狼の次の手を予想している。',
+        '朝になったら新しい情報を整理しよう。'
       ]
     };
     
@@ -961,6 +1062,76 @@ export class GameRoom implements DurableObject {
     
     const availableMessages = messages[messageKey] || messages.day_villager;
     return availableMessages[Math.floor(Math.random() * availableMessages.length)];
+  }
+  
+  private getAIToAIResponse(aiPlayer: Player, speaker: string, responseType: string): string {
+    const role = aiPlayer.role;
+    const alivePlayers = this.gameState?.players.filter(p => p.isAlive && p.id !== aiPlayer.id) || [];
+    const randomTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)]?.name || 'someone';
+    
+    const responses: { [key: string]: string[] } = {
+      suspicion: [
+        `${speaker}の推理に同感だ。私も同じ疑いを持っていた。`,
+        `${speaker}の指摘は的確だが、証拠が不十分では？`,
+        `${speaker}、その根拠をもう少し詳しく説明してほしい。`,
+        `${speaker}の視点は興味深いが、${randomTarget}の方が怪しくないか？`,
+        `${speaker}の推理は鋭い。一緒に真相を追求しよう。`
+      ],
+      trust: [
+        `${speaker}を信じたいが、この状況では慎重になるべきだ。`,
+        `${speaker}の言葉は説得力があるが、裏付けが欲しい。`,
+        `${speaker}、君の提案は理にかなっている。`,
+        `${speaker}と協力して人狼を見つけ出そう。`,
+        `${speaker}の判断を信頼したいが、他の可能性も考慮すべきだ。`
+      ],
+      opinion: [
+        `${speaker}の分析は鋭い。私の考えと一致している。`,
+        `${speaker}、その観点は見落としていた。重要な指摘だ。`,
+        `${speaker}の質問に答えよう。私は${randomTarget}が最も怪しいと思う。`,
+        `${speaker}と同じ結論に達した。証拠を整理しよう。`,
+        `${speaker}の推理を聞いて、新たな疑問が浮かんだ。`
+      ],
+      general: [
+        `${speaker}の発言で状況が整理できた。`,
+        `${speaker}、君の論理は筋が通っている。`,
+        `${speaker}の意見を参考に、戦略を練り直そう。`,
+        `${speaker}と議論することで真実に近づけそうだ。`,
+        `${speaker}の視点から見ると、また違った景色が見える。`
+      ]
+    };
+    
+    // 人狼の場合はより戦略的で慎重な返答
+    if (role === 'werewolf') {
+      const werewolfResponses: { [key: string]: string[] } = {
+        suspicion: [
+          `${speaker}の推理は興味深いが、急ぎすぎではないか？`,
+          `${speaker}、その疑いは理解できるが証拠が薄い。`,
+          `${speaker}の指摘は的確だが、${randomTarget}の方が怪しいと思う。`,
+          `${speaker}、君の推理に一理あるが慎重に検討したい。`
+        ],
+        trust: [
+          `${speaker}を信頼したいが、この状況では全員疑うべきだ。`,
+          `${speaker}の誠実さは感じるが、油断は禁物だ。`,
+          `${speaker}、君の提案は村人らしい考えだね。`
+        ],
+        opinion: [
+          `${speaker}の質問は重要だ。私の見解を述べよう。`,
+          `${speaker}、君の分析は参考になるが別の可能性もある。`,
+          `${speaker}の推理を聞いて、${randomTarget}への疑いが深まった。`
+        ],
+        general: [
+          `${speaker}の発言は村人の視点として貴重だ。`,
+          `${speaker}、君の意見を聞いて考えが整理できた。`,
+          `${speaker}との議論で新たな手がかりが見えてきた。`
+        ]
+      };
+      
+      const werewolfOptions = werewolfResponses[responseType] || werewolfResponses.general;
+      return werewolfOptions[Math.floor(Math.random() * werewolfOptions.length)];
+    }
+    
+    const options = responses[responseType] || responses.general;
+    return options[Math.floor(Math.random() * options.length)];
   }
   
   private getDefensiveMessage(playerName: string): string {
@@ -1031,45 +1202,282 @@ export class GameRoom implements DurableObject {
     return phaseMessages[Math.floor(Math.random() * phaseMessages.length)];
   }
   
-  private triggerAIResponse(humanMessage: ChatMessage) {
+  private triggerAIResponse(message: ChatMessage) {
     if (!this.gameState || this.gameState.phase === 'ended') return;
     
-    // AIプレイヤーのみ抽出
+    // AIプレイヤーのみ抽出（発言者以外）
     const aiPlayers = this.gameState.players.filter(p =>
-      p.name.startsWith('AI-') &&
+      isAIPlayer(p.name) &&
       p.isAlive &&
-      p.id !== humanMessage.playerId
+      p.id !== message.playerId
     );
     
     if (aiPlayers.length === 0) return;
     
-    // 20%の確率で反応
-    if (Math.random() < 0.2) {
-      const respondingAI = aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+    // 戦略的な内容かどうかで反応確率を調整
+    const content = message.content.toLowerCase();
+    const isStrategicContent = content.includes('人狼') || content.includes('怪しい') ||
+                              content.includes('疑') || content.includes('投票') ||
+                              content.includes('占い') || content.includes('襲撃') ||
+                              content.includes('処刑') || content.includes('証拠');
+    
+    const isAIMessage = isAIPlayer(message.playerName);
+    let baseReactionChance = 0.25; // 基本確率を下げる
+    
+    if (isStrategicContent) {
+      baseReactionChance = isAIMessage ? 0.5 : 0.7; // 戦略的内容には高確率で反応
+    } else {
+      baseReactionChance = isAIMessage ? 0.15 : 0.3; // 一般的内容には低確率
+    }
+    
+    // 最大2人のAIが反応（会話の過密化を防ぐ）
+    const maxResponders = Math.min(2, aiPlayers.length);
+    const shuffledAIs = [...aiPlayers].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < maxResponders; i++) {
+      const aiPlayer = shuffledAIs[i];
+      const reactionChance = baseReactionChance * (1 - i * 0.4);
       
-      // 1-3秒後に返答
-      const delay = Math.floor(Math.random() * 2000) + 1000;
+      if (Math.random() < reactionChance) {
+        // 3-10秒後に返答（戦略的内容は早く、一般的内容は遅く）
+        const baseDelay = isStrategicContent ? 3000 : 6000;
+        const delay = Math.floor(Math.random() * 4000) + baseDelay + (i * 4000);
+        
+        setTimeout(() => {
+          if (!this.gameState || this.gameState.phase === 'ended' || !aiPlayer.isAlive) return;
+          
+          const responseMessage = this.generateAIMessage(aiPlayer, message);
+          
+          const chatMessage: ChatMessage = {
+            id: crypto.randomUUID(),
+            playerId: aiPlayer.id,
+            playerName: aiPlayer.name,
+            content: responseMessage,
+            timestamp: Date.now(),
+            type: 'public'
+          };
+          
+          this.gameState.chatMessages.push(chatMessage);
+          this.gameState.updatedAt = Date.now();
+          
+          console.log(`[AI戦略会話] ${aiPlayer.name}が${message.playerName}に反応: ${responseMessage}`);
+          
+          this.saveGameState();
+          this.broadcastGameState();
+          
+          // 戦略的内容の場合のみ連鎖反応を許可（確率を下げる）
+          if (isStrategicContent && Math.random() < 0.2) {
+            this.triggerAIResponse(chatMessage);
+          }
+        }, delay);
+      }
+    }
+  }
+
+  private scheduleAIVoting() {
+    if (!this.gameState) return;
+
+    // AIプレイヤーを取得
+    const aiPlayers = this.gameState.players.filter(p =>
+      isAIPlayer(p.name) && p.isAlive
+    );
+
+    if (aiPlayers.length === 0) {
+      console.log(`🤖 [AI投票] 生存AIプレイヤーなし - 投票スケジュールなし`);
+      return;
+    }
+
+    console.log(`🤖 [AI投票] ${aiPlayers.length}人のAIプレイヤーの投票をスケジュール: ${aiPlayers.map(p => p.name).join(', ')}`);
+
+    // 投票可能な対象を取得（生存している他のプレイヤー）
+    const votingTargets = this.gameState.players.filter(p =>
+      p.isAlive
+    );
+
+    if (votingTargets.length === 0) return;
+
+    // 各AIプレイヤーに対して投票をスケジュール
+    aiPlayers.forEach((aiPlayer, index) => {
+      // 5-15秒後にランダムに投票
+      const delay = 5000 + Math.random() * 10000 + (index * 2000);
       
       setTimeout(() => {
-        if (!this.gameState || this.gameState.phase === 'ended' || !respondingAI.isAlive) return;
+        if (!this.gameState || this.gameState.phase !== 'voting') return;
         
-        const message = this.generateAIMessage(respondingAI, humanMessage);
+        // まだ投票していない場合のみ投票
+        const hasVoted = this.gameState.votes.some(vote => vote.voterId === aiPlayer.id);
+        if (hasVoted) return;
+
+        // ランダムに投票対象を選択（人狼の場合は村人を優先）
+        let target;
+        let voteReason = '';
         
-        const chatMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          playerId: respondingAI.id,
-          playerName: respondingAI.name,
-          content: message,
-          timestamp: Date.now(),
-          type: 'public'
-        };
+        // 自分以外の投票対象を取得
+        const availableTargets = votingTargets.filter(p => p.id !== aiPlayer.id);
         
-        this.gameState.chatMessages.push(chatMessage);
-        this.gameState.updatedAt = Date.now();
+        if (availableTargets.length === 0) return;
         
-        this.saveGameState();
-        this.broadcastGameState();
+        if (aiPlayer.role === 'werewolf') {
+          // 人狼は村人を優先的に投票
+          const villagers = availableTargets.filter(p => p.role !== 'werewolf');
+          if (villagers.length > 0) {
+            target = villagers[Math.floor(Math.random() * villagers.length)];
+            voteReason = `人狼として村人${target.name}を排除するため投票`;
+          } else {
+            target = availableTargets[Math.floor(Math.random() * availableTargets.length)];
+            voteReason = `人狼として適当に${target.name}に投票（村人が見つからない）`;
+          }
+        } else {
+          // 村人チームはランダムに投票
+          target = availableTargets[Math.floor(Math.random() * availableTargets.length)];
+          const suspicionReasons = [
+            '発言が少なく怪しい',
+            '論理的でない発言をしている',
+            '他の人を疑う発言が多い',
+            '投票行動が不自然',
+            '直感的に怪しい',
+            '消去法で残った'
+          ];
+          const reason = suspicionReasons[Math.floor(Math.random() * suspicionReasons.length)];
+          voteReason = `${aiPlayer.role === 'seer' ? '占い師' : aiPlayer.role === 'hunter' ? '狩人' : aiPlayer.role === 'medium' ? '霊媒師' : '村人'}として${target.name}が${reason}ため投票`;
+        }
+
+        if (target) {
+          // 投票を実行
+          const vote = {
+            voterId: aiPlayer.id,
+            targetId: target.id,
+            timestamp: Date.now()
+          };
+          
+          this.gameState.votes.push(vote);
+          
+          // 投票メッセージをチャットに追加
+          const voteMessage = {
+            id: crypto.randomUUID(),
+            playerId: aiPlayer.id,
+            playerName: aiPlayer.name,
+            content: `${target.name}に投票しました。`,
+            timestamp: Date.now(),
+            type: 'public' as const
+          };
+          this.gameState.chatMessages.push(voteMessage);
+          
+          // デバッグログ出力（開発環境のみ）
+          console.log(`[AI投票] ${aiPlayer.name} (${aiPlayer.role}) → ${target.name}`);
+          console.log(`[投票理由] ${voteReason}`);
+          console.log(`[投票タイミング] ${Math.round(delay/1000)}秒後に投票実行`);
+          
+          this.gameState.updatedAt = Date.now();
+          this.saveGameState();
+          this.broadcastGameState();
+        }
       }, delay);
+    });
+  }
+
+  private scheduleAINightActions() {
+    if (!this.gameState) return;
+
+    // 夜に行動できるAIプレイヤーを取得
+    const nightActors = this.gameState.players.filter(p =>
+      isAIPlayer(p.name) &&
+      p.isAlive &&
+      (p.role === 'werewolf' || p.role === 'seer' || p.role === 'hunter' || p.role === 'medium')
+    );
+
+    if (nightActors.length === 0) {
+      console.log(`[AI夜間行動] 行動可能なAIプレイヤーなし`);
+      return;
     }
+
+    console.log(`[AI夜間行動] ${nightActors.length}人のAIプレイヤーの夜間行動をスケジュール:`);
+    nightActors.forEach(p => console.log(`  - ${p.name} (${p.role})`));
+
+    nightActors.forEach((aiPlayer, index) => {
+      // 3-10秒後にランダムに行動
+      const delay = 3000 + Math.random() * 7000 + (index * 1500);
+      
+      setTimeout(() => {
+        if (!this.gameState || this.gameState.phase !== 'night') return;
+        
+        // 既に行動済みかチェック
+        const hasActed = this.gameState.nightActions?.some(action => action.actorId === aiPlayer.id);
+        if (hasActed) return;
+
+        let target;
+        let actionType: 'attack' | 'guard' | 'divine' | undefined;
+        let actionReason = '';
+
+        switch (aiPlayer.role) {
+          case 'werewolf':
+            // 人狼は村人を襲撃
+            const villagers = this.gameState.players.filter(p =>
+              p.isAlive && p.role !== 'werewolf' && p.id !== aiPlayer.id
+            );
+            if (villagers.length > 0) {
+              target = villagers[Math.floor(Math.random() * villagers.length)];
+              actionType = 'attack';
+              actionReason = `人狼として${target.name}を襲撃（村人を減らすため）`;
+            }
+            break;
+
+          case 'seer':
+            // 占い師は他のプレイヤーを占う
+            const divineTargets = this.gameState.players.filter(p =>
+              p.isAlive && p.id !== aiPlayer.id
+            );
+            if (divineTargets.length > 0) {
+              target = divineTargets[Math.floor(Math.random() * divineTargets.length)];
+              actionType = 'divine';
+              actionReason = `占い師として${target.name}を占い（人狼かどうか確認）`;
+            }
+            break;
+
+          case 'hunter':
+            // 狩人は重要そうなプレイヤーを守る
+            const guardTargets = this.gameState.players.filter(p =>
+              p.isAlive && p.id !== aiPlayer.id
+            );
+            if (guardTargets.length > 0) {
+              target = guardTargets[Math.floor(Math.random() * guardTargets.length)];
+              actionType = 'guard';
+              const guardReasons = [
+                '重要そうなプレイヤーのため',
+                '人狼に狙われそうなため',
+                '占い師の可能性があるため',
+                '発言が村人らしいため'
+              ];
+              const reason = guardReasons[Math.floor(Math.random() * guardReasons.length)];
+              actionReason = `狩人として${target.name}を護衛（${reason}）`;
+            }
+            break;
+
+          case 'medium':
+            // 霊媒師は自動的に霊視（対象不要）
+            if (this.gameState.lastExecuted) {
+              actionType = 'divine';
+              target = aiPlayer;
+              actionReason = `霊媒師として${this.gameState.lastExecuted.name}の正体を霊視`;
+            }
+            break;
+        }
+
+        if (target && actionType) {
+          // デバッグログ出力
+          console.log(`[AI夜間行動] ${aiPlayer.name} (${aiPlayer.role}) → ${actionType} on ${target.name}`);
+          console.log(`[行動理由] ${actionReason}`);
+          console.log(`⏰ [行動タイミング] ${Math.round(delay/1000)}秒後に実行`);
+
+          // 能力使用メッセージを送信
+          this.handleUseAbility(aiPlayer.id, {
+            type: 'use_ability',
+            roomId: this.gameState.id,
+            targetId: target.id,
+            ability: actionType
+          });
+        }
+      }, delay);
+    });
   }
 }

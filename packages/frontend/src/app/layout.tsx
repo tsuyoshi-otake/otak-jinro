@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Otak Jinro - 人狼ゲーム',
+  title: 'otak-jinro - 人狼ゲーム',
   description: 'リアルタイムオンライン人狼ゲーム',
   keywords: ['人狼', 'ゲーム', 'オンライン', 'マルチプレイヤー'],
   authors: [{ name: 'SystemExe Research and Development' }],

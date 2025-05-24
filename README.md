@@ -1,4 +1,4 @@
-# Otak Jinro (人狼ゲーム)
+# otak-jinro (人狼ゲーム)
 
 Next.js + Cloudflare Workers を使用したリアルタイム人狼ゲーム
 
@@ -14,19 +14,19 @@ Next.js + Cloudflare Workers を使用したリアルタイム人狼ゲーム
 - [トラブルシューティング](#トラブルシューティング)
 - [開発ログ](#開発ログ)
 
-## 🎯 概要
+## 概要
 
-Otak Jinroは、Cloudflare WorkersとNext.jsを使用して構築されたリアルタイムオンライン人狼ゲームです。WebSocketを使用したリアルタイム通信により、複数のプレイヤーが同時にゲームを楽しむことができます。
+otak-jinroは、Cloudflare WorkersとNext.jsを使用して構築されたリアルタイムオンライン人狼ゲームです。WebSocketを使用したリアルタイム通信により、複数のプレイヤーが同時にゲームを楽しむことができます。
 
 ### 主な特徴
 
-- ✅ **リアルタイムマルチプレイヤー**: WebSocketによる即座の状態同期
-- ✅ **スケーラブル**: Cloudflare Workersのエッジコンピューティング
-- ✅ **モダンUI**: Next.js 14 + Tailwind CSSによるレスポンシブデザイン
-- ✅ **型安全**: TypeScriptによる堅牢な開発
-- ✅ **モノレポ**: Turboによる効率的な開発環境
+- **リアルタイムマルチプレイヤー**: WebSocketによる即座の状態同期
+- **スケーラブル**: Cloudflare Workersのエッジコンピューティング
+- **モダンUI**: Next.js 14 + Tailwind CSSによるレスポンシブデザイン
+- **型安全**: TypeScriptによる堅牢な開発
+- **モノレポ**: Turboによる効率的な開発環境
 
-## 🛠️ 技術スタック
+## 技術スタック
 
 ### Frontend
 - **Next.js 14** (App Router)
@@ -203,7 +203,7 @@ powershell -ExecutionPolicy Bypass -File watch-logs.ps1 all
 
 **使用タイミング**: 機能実装後の確認時
 
-### ⚡ 推奨開発フロー
+### 推奨開発フロー
 
 #### 日常開発
 ```powershell
@@ -361,7 +361,7 @@ ws://localhost:8787/api/rooms/{roomId}/ws
 }
 ```
 
-## 🎮 ゲーム仕様
+## ゲーム仕様
 
 ### 基本ルール
 
@@ -449,7 +449,7 @@ npm run build
 - **WARN**: 警告（動作に影響なし）
 - **ERROR**: エラー（要対応）
 
-## 📝 開発ログ
+## 開発ログ
 
 ### 2025/05/23 - プロジェクト初期化
 
@@ -479,10 +479,10 @@ npm run build
    - WebSocket通信
 
 #### 動作確認
-- ✅ フロントエンド起動確認（localhost:3000）
-- ✅ ルーム作成機能動作確認
-- ✅ ページ遷移動作確認
-- ✅ ログ出力システム構築
+- フロントエンド起動確認（localhost:3000）
+-  ルーム作成機能動作確認
+-  ページ遷移動作確認
+-  ログ出力システム構築
 
 #### 技術的課題と解決
 1. **workspace:* 構文エラー**
@@ -504,19 +504,66 @@ npm run build
 - [ ] ゲームロジック詳細実装
 - [ ] UI/UX改善
 
+### 2025/05/24 - ローカル開発環境検証
+
+#### 検証結果
+1. **プロジェクト構造確認**
+   -  モノレポ構成（Turbo使用）正常
+   -  依存関係インストール成功（脆弱性警告あり）
+   -  PowerShellスクリプト動作確認
+
+2. **サーバー起動確認**
+   - Frontend (Next.js): http://localhost:3000 正常起動
+   - Workers (Cloudflare): http://localhost:8787 起動問題あり
+   - ヘルスチェックAPI: `/health` エンドポイント動作
+
+3. **設定問題の発見と修正**
+   -  **重大な問題**: ローカル開発時も本番Cloudflare環境にアクセス
+   -  **解決策**: `packages/frontend/.env.local` 作成
+   ```
+   NEXT_PUBLIC_WORKERS_URL=http://localhost:8787
+   NEXT_PUBLIC_WS_URL=ws://localhost:8787
+   ```
+
+#### 発見された課題
+1. **環境分離の不備**
+   - ローカル開発時に本番APIを呼び出す設定
+   - 環境変数の適切な管理が必要
+
+2. **Workersサーバーの不安定性**
+   - 起動に時間がかかる場合がある
+   - ログ監視が必要
+
+3. **依存関係の脆弱性**
+   - 10件の脆弱性（1 low, 5 moderate, 4 high）
+   - `punycode`モジュールの非推奨警告
+
+#### 改善提案
+1. **環境設定の標準化**
+   - `.env.example`ファイルの作成
+   - 開発/ステージング/本番環境の明確な分離
+
+2. **起動スクリプトの改善**
+   - サーバー起動待機ロジックの追加
+   - エラーハンドリングの強化
+
+3. **依存関係の更新**
+   - セキュリティ脆弱性の修正
+   - 非推奨パッケージの更新
+
 ### パフォーマンス指標
 
 #### ビルド時間
-- **Frontend**: ~2.4秒（463モジュール）
-- **Workers**: ~1.0秒（推定）
+- **Frontend**: ~4.1秒（472モジュール）
+- **Workers**: 起動確認中
 
 #### 応答時間
-- **ホームページ**: 71ms（2回目以降）
-- **API**: 未測定
+- **ホームページ**: 正常レスポンス確認
+- **ヘルスチェックAPI**: 正常動作確認
 
 #### リソース使用量
-- **Node.js プロセス**: 14個実行中
-- **メモリ使用量**: 平均50MB/プロセス
+- **Node.js プロセス**: 13個強制終了後再起動
+- **メモリ使用量**: 監視中
 
 ## 🤝 コントリビューション
 
@@ -530,10 +577,141 @@ npm run build
 
 このプロジェクトは MIT ライセンスの下で公開されています。
 
-## 👥 開発チーム
+## 開発チーム
 
 - **SystemExe Research and Development**
 
+### 2025/05/24 - AI投票機能実装
+
+#### 実装内容
+1. **AIプレイヤーの自動投票機能**
+   - 投票フェーズでAIプレイヤーが5-15秒後に自動投票
+   - 人狼AIは村人を優先的に投票
+   - 村人チームAIはランダムに投票
+   - 投票メッセージをチャットに表示
+
+2. **AIプレイヤーの夜間能力自動使用**
+   - 人狼: 村人を自動襲撃
+   - 占い師: ランダムに占い
+   - 狩人: ランダムに護衛
+   - 霊媒師: 自動霊視
+
+#### 修正されたファイル
+- `packages/workers/src/gameRoom.ts`
+  - `scheduleAIVoting()` メソッド追加
+  - `scheduleAINightActions()` メソッド追加
+  - フェーズ変更時のAI行動スケジューリング
+
+#### 動作確認
+-  ローカル環境でサーバー起動成功
+-  フロントエンド・バックエンド連携確認
+-  環境変数設定による本番/開発環境分離
+-  AIプレイヤー追加・投票機能実装完了
+
+### 2025/05/24 - AI会話システム大幅改善
+
+#### 実装内容
+1. **戦略的AI会話システム**
+   - 表面的な返答から戦略的で具体的な議論に改善
+   - 疑い、推理、弁明、証拠要求などゲーム性重視の発言パターン
+   - 役職に応じた演技（人狼の隠蔽工作、村人の推理活動）
+
+2. **AI同士の会話連鎖システム**
+   - AI発言に対して他のAIが反応する仕組み
+   - 戦略的内容には高確率反応（50-70%）、一般的内容には低確率反応（15-30%）
+   - 最大2人のAIが順次反応（会話の過密化防止）
+
+3. **日数に応じた論理的発言**
+   - 初日: 「昨日の投票行動」などの矛盾した発言を排除
+   - 2日目以降: 前日の投票、夜間の襲撃パターンなどの情報を活用
+   - 論理的整合性の確保
+
+4. **AI名前の親しみやすい変更**
+   - `AI-Alice` → `アリス`、`AI-Bob` → `ボブ` など
+   - 日本語カタカナ名で親しみやすさを向上
+
+5. **プレイヤー名記憶機能**
+   - localStorage使用で名前を自動保存・復元
+   - ページ再読み込み時も名前が記憶される
+
+6. **UI改善**
+   - プレイヤー名必須化とバリデーション強化
+   - 段階的入力フローの実装
+
+#### 修正されたファイル
+- `packages/workers/src/gameRoom.ts`
+  - `generateAIMessage()` メソッド: 戦略的発言パターンの実装
+  - `getAIToAIResponse()` メソッド: AI同士の返答システム
+  - `triggerAIResponse()` メソッド: 会話頻度の最適化
+  - 日数に応じた発言分岐ロジック
+
+- `packages/frontend/src/app/room/[roomId]/page.tsx`
+  - AI名前判定システムの統一
+  - 勝利条件判定の修正（狂人の扱い）
+
+- `packages/frontend/src/app/page.tsx`
+  - プレイヤー名記憶機能（localStorage）
+  - UI改善とバリデーション強化
+
+#### 主要クラス・関数構成
+
+##### GameRoom クラス (packages/workers/src/gameRoom.ts)
+```typescript
+export class GameRoom implements DurableObject {
+  // 核心メソッド
+  private generateAIMessage(aiPlayer: Player, context?: ChatMessage): string
+  private getAIToAIResponse(aiPlayer: Player, speaker: string, responseType: string): string
+  private triggerAIResponse(message: ChatMessage): void
+  private scheduleAIChat(aiPlayer: Player): void
+  private scheduleAIVoting(): void
+  private scheduleAINightActions(): void
+  
+  // ゲーム進行
+  private startPhaseTimer(): void
+  private processPhaseEnd(): void
+  private handleJoinRoom(playerId: string, message: any): void
+  
+  // WebSocket通信
+  private handleWebSocket(request: Request): Promise<Response>
+  private broadcastGameState(): void
+  private sendToPlayer(playerId: string, message: WebSocketMessage): void
+}
+```
+
+##### フロントエンド主要関数 (packages/frontend/src/app/room/[roomId]/page.tsx)
+```typescript
+// AI判定システム
+const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', ...];
+const isAIPlayer = (playerName: string) => AI_NAMES.includes(playerName);
+
+// 主要機能
+const addAIPlayer = async () => { ... }; // AIプレイヤー追加
+const handleVote = async (targetId: string) => { ... }; // 投票処理
+const handleAbility = async (targetId: string) => { ... }; // 能力使用
+```
+
+##### 共通ユーティリティ (packages/shared/src/utils/gameUtils.ts)
+```typescript
+export function checkWinCondition(players: Player[]): 'villagers' | 'werewolves' | null;
+export function assignRoles(players: Player[], customRoles?: PlayerRole[]): Player[];
+export function countVotes(votes: Vote[]): { targetId: string; count: number }[];
+export function getExecutionTarget(votes: Vote[]): string | null;
+```
+
+#### 動作確認
+-  AI同士の戦略的会話連鎖
+-  日数に応じた論理的発言
+-  親しみやすいAI名前表示
+-  プレイヤー名記憶機能
+-  改善されたUI操作フロー
+-  ゲーム終了時のモーダル表示修正
+
+#### 技術的改善
+- **保守性**: AI名前リストの一元管理
+- **拡張性**: 新しいAI発言パターンの追加が容易
+- **一貫性**: フロントエンド・サーバー間の判定ロジック統一
+- **ユーザビリティ**: より自然で戦略的なゲーム体験
+
 ---
 
-**最終更新**: 2025/05/23 19:54 JST
+**最終更新**: 2025/05/24 17:00 JST

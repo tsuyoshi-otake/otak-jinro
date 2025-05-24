@@ -9,7 +9,7 @@ param(
     [string]$Service = "all"
 )
 
-Write-Host "=== Otak Jinro Log Monitoring ===" -ForegroundColor Green
+Write-Host "=== otak-jinro Log Monitoring ===" -ForegroundColor Green
 
 # Check log directory
 if (!(Test-Path "logs")) {

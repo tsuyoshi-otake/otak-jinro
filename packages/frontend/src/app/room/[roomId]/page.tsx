@@ -6,6 +6,12 @@ import { Modal } from '../../../components/ui/modal'
 import { getStoredApiKey, setStoredApiKey, validateApiKey, testApiKey, generateAIPersonality, generateAIResponse, moderateMessage, determineAIResponse, updateEmotionalState } from '../../../lib/openai'
 import { Avatar } from '../../../lib/avatars'
 
+// AI名前の定数
+const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク']
+
+// AIプレイヤーかどうかを判定する関数
+const isAIPlayer = (playerName: string) => AI_NAMES.includes(playerName)
+
 interface Player {
   id: string
   name: string
@@ -56,6 +62,8 @@ export default function RoomPage() {
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null)
   const [selectedAbilityTarget, setSelectedAbilityTarget] = useState<string | null>(null)
   const [aiPersonalities, setAiPersonalities] = useState<Map<string, any>>(new Map())
+  const [showGameEndModal, setShowGameEndModal] = useState(false)
+  const [gameResult, setGameResult] = useState<{winner: string, survivors: Player[]} | null>(null)
 
   // タイマーの実装
   useEffect(() => {
@@ -95,7 +103,7 @@ export default function RoomPage() {
       
       // 最新のメッセージを取得
       const latestMessage = chatMessages[chatMessages.length - 1]
-      if (!latestMessage || latestMessage.playerName.startsWith('AI-')) return
+      if (!latestMessage || isAIPlayer(latestMessage.playerName)) return
       
       // 既に処理済みのメッセージかチェック
       if (lastProcessedMessageRef.current === latestMessage.id) return
@@ -103,7 +111,7 @@ export default function RoomPage() {
       
       // AIプレイヤーを取得
       const aiPlayers = gameState.players.filter(p =>
-        p.name.startsWith('AI-') &&
+        isAIPlayer(p.name) &&
         p.isAlive
       )
       
@@ -276,7 +284,7 @@ ${respondingAI.role === 'werewolf' ?
       const apiKey = getStoredApiKey()
       if (!apiKey || !gameState || gameState.phase === 'lobby' || gameState.phase === 'ended') return
       
-      const aiPlayers = gameState.players.filter(p => p.name.startsWith('AI-') && p.isAlive)
+      const aiPlayers = gameState.players.filter(p => isAIPlayer(p.name) && p.isAlive)
       if (aiPlayers.length === 0) return
       
       // 最後のメッセージから30秒経過した場合に自発的発言を検討
@@ -404,6 +412,34 @@ ${recentMessages}
                 // チャットメッセージも更新
                 if (message.gameState.chatMessages) {
                   setChatMessages(message.gameState.chatMessages)
+                }
+                // ゲーム終了チェック
+                if (message.gameState.phase === 'ended' && !showGameEndModal) {
+                  const survivors = message.gameState.players.filter((p: Player) => p.isAlive)
+                  const aliveWerewolves = survivors.filter((p: Player) => p.role === 'werewolf')
+                  const aliveVillagers = survivors.filter((p: Player) =>
+                    p.role !== 'werewolf' && p.role !== 'madman'
+                  )
+                  
+                  let winner = ''
+                  if (aliveWerewolves.length === 0) {
+                    winner = '村人チーム'
+                  } else if (aliveWerewolves.length >= aliveVillagers.length) {
+                    winner = '人狼チーム'
+                  } else {
+                    winner = 'ゲーム継続中' // 念のため
+                  }
+                  
+                  console.log('[ゲーム終了判定]', {
+                    phase: message.gameState.phase,
+                    survivors: survivors.length,
+                    werewolves: aliveWerewolves.length,
+                    villagers: aliveVillagers.length,
+                    winner
+                  })
+                  
+                  setGameResult({ winner, survivors })
+                  setShowGameEndModal(true)
                 }
                 break
               case 'divine_result':
@@ -582,9 +618,8 @@ ${recentMessages}
 
     setIsAddingAI(true)
     try {
-      const aiNames = ['AI-Alice', 'AI-Bob', 'AI-Charlie', 'AI-Diana', 'AI-Eve', 'AI-Frank', 'AI-Grace', 'AI-Henry']
-      const existingAINames = gameState?.players?.filter(p => p.name && p.name.startsWith('AI-')).map(p => p.name) || []
-      const availableNames = aiNames.filter(name => !existingAINames.includes(name))
+      const existingAINames = gameState?.players?.filter(p => isAIPlayer(p.name)).map(p => p.name) || []
+      const availableNames = AI_NAMES.filter(name => !existingAINames.includes(name))
       
       if (availableNames.length === 0) {
         console.error('すべてのAI名が使用済みです')
@@ -731,11 +766,11 @@ ${recentMessages}
                         {player.isHost && (
                           <span className="text-xs bg-yellow-600 text-white px-1 rounded">HOST</span>
                         )}
-                        {player.name && player.name.startsWith('AI-') && (
+                        {player.name && isAIPlayer(player.name) && (
                           <span className="text-xs bg-purple-600 text-white px-1 rounded">AI</span>
                         )}
                       </div>
-                      {player.name && player.name.startsWith('AI-') && aiPersonalities.has(player.id) && (
+                      {player.name && isAIPlayer(player.name) && aiPersonalities.has(player.id) && (
                         <div className="text-xs text-gray-400 mt-1 ml-4">
                           {(() => {
                             const personality = aiPersonalities.get(player.id)
@@ -849,7 +884,7 @@ ${recentMessages}
               {/* 投票・能力使用UI */}
               {gameState?.phase === 'voting' && (
                 <div className="mb-4 p-4 bg-red-900/30 border border-red-600/50 rounded-lg">
-                  <h3 className="text-lg font-bold text-red-300 mb-3">⚖️ 投票フェーズ</h3>
+                  <h3 className="text-lg font-bold text-red-300 mb-3">投票フェーズ</h3>
                   <p className="text-red-200 text-sm mb-4">処刑する人を選んでください</p>
                   
                   {/* 現在の投票状況 */}
@@ -907,8 +942,8 @@ ${recentMessages}
                         >
                           <Avatar playerName={player.name} size="sm" />
                           <span className="font-medium">{player.name}</span>
-                          {selectedVoteTarget === player.id && <span className="text-red-100 text-sm">🎯 選択中</span>}
-                          {myVote && selectedVoteTarget !== player.id && <span className="text-red-300 text-sm">✓ 投票済み</span>}
+                          {selectedVoteTarget === player.id && <span className="text-red-100 text-sm">選択中</span>}
+                          {myVote && selectedVoteTarget !== player.id && <span className="text-red-300 text-sm">投票済み</span>}
                         </button>
                       );
                     })}
@@ -918,7 +953,7 @@ ${recentMessages}
 
               {gameState?.phase === 'night' && (
                 <div className="mb-4 p-4 bg-blue-900/30 border border-blue-600/50 rounded-lg">
-                  <h3 className="text-lg font-bold text-blue-300 mb-3">🌙 夜フェーズ</h3>
+                  <h3 className="text-lg font-bold text-blue-300 mb-3">夜フェーズ</h3>
                   {(() => {
                     const myPlayer = gameState?.players?.find(p => p.name === playerName);
                     if (!myPlayer || !myPlayer.role) return null;
@@ -951,7 +986,7 @@ ${recentMessages}
                               >
                                 <Avatar playerName={player.name} size="sm" />
                                 <span className="text-white font-medium">{player.name}</span>
-                                {selectedAbilityTarget === player.id && <span className="text-red-100 text-sm">🎯 選択中</span>}
+                                {selectedAbilityTarget === player.id && <span className="text-red-100 text-sm">選択中</span>}
                               </button>
                             ))}
                           </div>
@@ -1019,7 +1054,7 @@ ${recentMessages}
                               >
                                 <Avatar playerName={player.name} size="sm" />
                                 <span className="text-white font-medium">{player.name}</span>
-                                {selectedAbilityTarget === player.id && <span className="text-green-100 text-sm">🛡️ 選択中</span>}
+                                {selectedAbilityTarget === player.id && <span className="text-green-100 text-sm">選択中</span>}
                               </button>
                             ))}
                           </div>
@@ -1123,7 +1158,7 @@ ${recentMessages}
                                 <div className="flex-1">
                                   <div className="flex items-baseline space-x-2 mb-1">
                                     <span className="font-medium text-yellow-300 text-sm">
-                                      🛡️ System
+                                      System
                                     </span>
                                     <span className="text-xs text-yellow-400/70">
                                       {new Date(msg.timestamp).toLocaleTimeString('ja-JP', {
@@ -1242,7 +1277,7 @@ ${recentMessages}
       <Modal
         isOpen={showInappropriateModal}
         onClose={() => setShowInappropriateModal(false)}
-        title="⚠️ 不適切な発言"
+        title="不適切な発言"
       >
         <div className="space-y-4">
           <div className="bg-red-900/30 border border-red-600/50 rounded-lg p-4">
@@ -1351,7 +1386,7 @@ ${recentMessages}
               </div>
               <div className="bg-green-900/20 p-3 rounded">
                 <p className="text-green-300 text-sm">
-                  💬 チャットで積極的に発言しましょう。
+                  チャットで積極的に発言しましょう。
                   「誰が怪しいと思う？」「昨夜何か気づいたことは？」など
                 </p>
               </div>
@@ -1361,7 +1396,7 @@ ${recentMessages}
           {gameState?.phase === 'voting' && (
             <div className="bg-red-900/20 p-3 rounded">
               <p className="text-red-300 text-sm">
-                ⚖️ 投票フェーズ: 最も怪しいと思う人に投票しましょう。
+                投票フェーズ: 最も怪しいと思う人に投票しましょう。
                 最多票の人が処刑されます。
               </p>
             </div>
@@ -1370,7 +1405,7 @@ ${recentMessages}
           {gameState?.phase === 'night' && (
             <div className="bg-blue-900/20 p-3 rounded">
               <p className="text-blue-300 text-sm">
-                🌙 夜フェーズ: 特殊能力を持つ役職は行動できます。
+                夜フェーズ: 特殊能力を持つ役職は行動できます。
                 村人は朝を待ちましょう。
               </p>
             </div>
@@ -1385,6 +1420,103 @@ ${recentMessages}
               <li>AIプレイヤーの発言にも注目してみましょう</li>
             </ul>
           </div>
+        </div>
+      </Modal>
+
+      {/* ゲーム終了モーダル */}
+      <Modal
+        isOpen={showGameEndModal}
+        onClose={() => {}}
+        title="ゲーム終了"
+        size="lg"
+      >
+        <div className="space-y-6">
+          {gameResult && (
+            <>
+              <div className="text-center">
+                <div className={`text-6xl mb-4 ${gameResult.winner === '村人チーム' ? 'text-blue-400' : 'text-red-400'}`}>
+                  {gameResult.winner === '村人チーム' ? '勝利' : '敗北'}
+                </div>
+                <h2 className={`text-3xl font-bold mb-2 ${gameResult.winner === '村人チーム' ? 'text-blue-300' : 'text-red-300'}`}>
+                  {gameResult.winner}の勝利！
+                </h2>
+                <p className="text-gray-300">
+                  {gameResult.winner === '村人チーム'
+                    ? '人狼を全員処刑することに成功しました！'
+                    : '人狼が村を支配しました...'}
+                </p>
+              </div>
+
+              <div className="bg-white/10 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-white mb-3">生存者</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {gameResult.survivors.map((player) => (
+                    <div key={player.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded">
+                      <Avatar playerName={player.name} size="sm" />
+                      <div className="flex-1">
+                        <span className="text-white font-medium">{player.name}</span>
+                        <span className="text-gray-400 text-sm ml-2">
+                          ({player.role === 'villager' ? '村人' :
+                            player.role === 'werewolf' ? '人狼' :
+                            player.role === 'seer' ? '占い師' :
+                            player.role === 'medium' ? '霊媒師' :
+                            player.role === 'hunter' ? '狩人' :
+                            player.role === 'madman' ? '狂人' : player.role})
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white/10 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-white mb-3">全プレイヤーの役職</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {gameState?.players?.map((player) => (
+                    <div key={player.id} className={`flex items-center space-x-3 p-2 rounded ${player.isAlive ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
+                      <Avatar playerName={player.name} size="sm" />
+                      <div className="flex-1">
+                        <span className={`font-medium ${player.isAlive ? 'text-green-300' : 'text-red-300'}`}>
+                          {player.name}
+                        </span>
+                        <span className="text-gray-400 text-sm ml-2">
+                          ({player.role === 'villager' ? '村人' :
+                            player.role === 'werewolf' ? '人狼' :
+                            player.role === 'seer' ? '占い師' :
+                            player.role === 'medium' ? '霊媒師' :
+                            player.role === 'hunter' ? '狩人' :
+                            player.role === 'madman' ? '狂人' : player.role})
+                        </span>
+                        <span className={`text-xs ml-2 ${player.isAlive ? 'text-green-400' : 'text-red-400'}`}>
+                          {player.isAlive ? '生存' : '死亡'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowGameEndModal(false)
+                    // 観戦モードに移行（チャットは見れるが操作不可）
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition-colors"
+                >
+                  📺 観戦を続ける
+                </button>
+                <button
+                  onClick={() => {
+                    window.location.href = '/'
+                  }}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-md transition-colors"
+                >
+                  ホームに戻る
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

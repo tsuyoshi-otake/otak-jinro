@@ -5,7 +5,7 @@
 $env:PYTHONIOENCODING = "utf-8"
 chcp 65001 > $null
 
-Write-Host "=== Otak Jinro Development Environment Startup ===" -ForegroundColor Green
+Write-Host "=== otak-jinro Development Environment Startup ===" -ForegroundColor Green
 
 # Create log directory
 $logDir = "logs"
