@@ -64,6 +64,8 @@ export default function RoomPage() {
   const [aiPersonalities, setAiPersonalities] = useState<Map<string, any>>(new Map())
   const [showGameEndModal, setShowGameEndModal] = useState(false)
   const [gameResult, setGameResult] = useState<{winner: string, survivors: Player[]} | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
+  const [delayedError, setDelayedError] = useState<string | null>(null)
 
   // タイマーの実装
   useEffect(() => {
@@ -370,8 +372,33 @@ ${recentMessages}
   }, [])
 
   useEffect(() => {
-    if (!roomId || !playerName) {
-      setError('ルームIDまたはプレイヤー名が不正です')
+    // 初期化フラグを設定
+    const initTimer = setTimeout(() => {
+      setIsInitializing(false)
+      
+      // 初期化後にパラメータチェック
+      if (!roomId || !playerName) {
+        setDelayedError('ルームIDまたはプレイヤー名が不正です')
+      }
+    }, 100) // 100ms遅延
+
+    return () => clearTimeout(initTimer)
+  }, [])
+
+  // エラー表示の遅延処理
+  useEffect(() => {
+    if (delayedError && !isInitializing) {
+      const errorTimer = setTimeout(() => {
+        setError(delayedError)
+      }, 500) // 500ms遅延してエラーを表示
+
+      return () => clearTimeout(errorTimer)
+    }
+  }, [delayedError, isInitializing])
+
+  useEffect(() => {
+    // 初期化中はWebSocket接続を開始しない
+    if (isInitializing || !roomId || !playerName) {
       return
     }
 
@@ -387,6 +414,7 @@ ${recentMessages}
           console.log('Room ID:', roomId)
           setIsConnected(true)
           setError(null)
+          setDelayedError(null)
           
           // ルーム参加メッセージを送信
           const joinMessage = {
@@ -479,7 +507,7 @@ ${recentMessages}
                 setChatMessages(prev => [...prev, abilityMessage])
                 break
               case 'error':
-                setError(message.message)
+                setDelayedError(message.message)
                 break
               default:
                 console.log('未知のメッセージタイプ:', message.type)
@@ -496,14 +524,14 @@ ${recentMessages}
 
         ws.onerror = (error) => {
           console.error('WebSocketエラー:', error)
-          setError('接続エラーが発生しました')
+          setDelayedError('接続エラーが発生しました')
           setIsConnected(false)
         }
 
         return ws
       } catch (err) {
         console.error('WebSocket接続失敗:', err)
-        setError('WebSocket接続に失敗しました')
+        setDelayedError('WebSocket接続に失敗しました')
         return null
       }
     }
@@ -518,7 +546,7 @@ ${recentMessages}
         ws.close()
       }
     }
-  }, [roomId, playerName])
+  }, [roomId, playerName, isInitializing])
 
   // メッセージ送信中フラグ（二重送信防止）
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -690,13 +718,25 @@ ${recentMessages}
     }
   }
 
+  // 初期化中はローディング表示
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-gray-300">ルームに接続中...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-6 max-w-md">
           <h2 className="text-xl font-bold text-red-400 mb-2">エラー</h2>
           <p className="text-red-300">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.href = '/'}
             className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
           >

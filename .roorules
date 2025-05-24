@@ -1,0 +1,671 @@
+# Otak Jinro システムシーケンス図
+
+## 1. ルーム作成とプレイヤー参加フロー
+
+```mermaid
+sequenceDiagram
+    participant U as User (Browser)
+    participant F as Frontend (Next.js)
+    participant W as Workers (Cloudflare)
+    participant DO as Durable Object (GameRoom)
+    participant KV as KV Storage
+
+    Note over U,KV: ルーム作成フロー
+    U->>F: ルーム作成リクエスト
+    F->>W: POST /api/rooms
+    W->>DO: 新しいGameRoomインスタンス作成
+    DO->>KV: ゲーム状態保存
+    DO-->>W: ルームID返却
+    W-->>F: ルームID返却
+    F-->>U: ルーム作成完了
+
+    Note over U,KV: プレイヤー参加フロー
+    U->>F: ルーム参加 (roomId, playerName)
+    F->>W: WebSocket接続要求 (/api/rooms/{roomId}/ws)
+    W->>DO: WebSocket接続処理
+    DO-->>F: WebSocket接続確立
+    F->>DO: join_room メッセージ送信
+    DO->>DO: プレイヤー追加処理
+    DO->>KV: ゲーム状態更新
+    DO->>F: game_state_update ブロードキャスト
+    F->>U: プレイヤーリスト更新表示
+```
+
+## 2. ゲーム開始と進行フロー
+
+```mermaid
+sequenceDiagram
+    participant H as Host Player
+    participant F as Frontend
+    participant DO as Durable Object
+    participant AI as AI Players
+    participant P as Other Players
+
+    Note over H,P: ゲーム開始
+    H->>F: ゲーム開始ボタンクリック
+    F->>DO: start_game メッセージ
+    DO->>DO: 役職割り当て (assignRoles)
+    DO->>DO: フェーズを'day'に設定
+    DO->>DO: タイマー開始
+    DO->>F: game_state_update (全プレイヤーに)
+    F->>H: ゲーム画面表示
+    F->>P: ゲーム画面表示
+
+    Note over H,P: 昼フェーズ
+    loop 昼の議論時間
+        P->>F: チャットメッセージ入力
+        F->>DO: chat メッセージ
+        DO->>F: チャットメッセージブロードキャスト
+        F->>P: チャット表示更新
+        
+        alt AIプレイヤーの自動発言
+            DO->>AI: AI発言トリガー
+            AI->>DO: 自動生成メッセージ
+            DO->>F: チャットメッセージブロードキャスト
+        end
+    end
+
+    Note over H,P: 投票フェーズ
+    DO->>DO: フェーズを'voting'に変更
+    DO->>F: game_state_update
+    F->>P: 投票UI表示
+    
+    loop 各プレイヤーの投票
+        P->>F: 投票対象選択
+        F->>DO: vote メッセージ
+        DO->>DO: 投票記録
+        DO->>F: 投票状況更新
+    end
+    
+    DO->>DO: 投票結果集計
+    DO->>DO: 処刑対象決定
+    DO->>F: 処刑結果ブロードキャスト
+```
+
+## 3. 夜フェーズと能力使用フロー
+
+```mermaid
+sequenceDiagram
+    participant W as Werewolf
+    participant S as Seer
+    participant M as Medium
+    participant F as Frontend
+    participant DO as Durable Object
+
+    Note over W,DO: 夜フェーズ開始
+    DO->>DO: フェーズを'night'に変更
+    DO->>F: game_state_update
+    F->>W: 人狼用UI表示
+    F->>S: 占い師用UI表示
+    F->>M: 霊媒師用UI表示
+
+    Note over W,DO: 能力使用
+    par 人狼の襲撃
+        W->>F: 襲撃対象選択
+        F->>DO: use_ability (attack)
+        DO->>DO: 襲撃対象記録
+        DO->>F: ability_used 確認メッセージ
+    and 占い師の占い
+        S->>F: 占い対象選択
+        F->>DO: use_ability (divine)
+        DO->>DO: 占い実行
+        DO->>F: divine_result (占い師のみ)
+    and 霊媒師の霊媒
+        alt 前日処刑者がいる場合
+            DO->>DO: 霊媒結果計算
+            DO->>F: medium_result (霊媒師のみ)
+        end
+    end
+
+    Note over W,DO: 夜フェーズ終了
+    DO->>DO: 夜の結果処理
+    DO->>DO: 襲撃実行
+    DO->>DO: 勝利条件チェック
+    alt ゲーム継続
+        DO->>DO: 次の昼フェーズへ
+        DO->>F: game_state_update
+    else ゲーム終了
+        DO->>DO: フェーズを'ended'に設定
+        DO->>F: ゲーム終了結果ブロードキャスト
+        F->>W: ゲーム終了モーダル表示
+        F->>S: ゲーム終了モーダル表示
+        F->>M: ゲーム終了モーダル表示
+    end
+```
+
+## 4. エラーハンドリングとWebSocket管理
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant W as Workers
+    participant DO as Durable Object
+
+    Note over U,DO: WebSocket接続エラー
+    U->>F: ページアクセス
+    F->>F: 初期化状態設定 (isInitializing=true)
+    F->>U: ローディング表示 ("ルームに接続中...")
+    F->>W: WebSocket接続試行 (100ms遅延後)
+    alt 接続失敗
+        W-->>F: 接続エラー
+        F->>F: delayedError設定 (500ms遅延)
+        F->>U: エラーメッセージ表示
+        F->>F: 再接続試行
+    else 接続成功
+        W->>DO: WebSocket確立
+        DO-->>F: 接続確認
+        F->>F: 初期化完了 (isInitializing=false)
+        F->>U: ゲーム画面表示
+    end
+
+    Note over U,DO: プレイヤー離脱処理
+    U->>F: ページ離脱/ブラウザ閉じる
+    F->>DO: WebSocket切断
+    DO->>DO: プレイヤー削除
+    DO->>DO: ゲーム状態更新
+    DO->>F: player_left ブロードキャスト
+    F->>U: プレイヤーリスト更新
+
+    Note over U,DO: 無効なメッセージ処理
+    U->>F: 不正な操作
+    F->>DO: 無効なWebSocketメッセージ
+    DO->>DO: バリデーション失敗
+    DO->>F: error メッセージ
+    F->>U: エラーメッセージ表示
+```
+
+## 5. AI プレイヤー動作フロー
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant F as Frontend
+    participant DO as Durable Object
+    participant AI as AI Logic
+    participant OpenAI as OpenAI API
+
+    Note over H,OpenAI: AIプレイヤー追加
+    H->>F: AIプレイヤー追加ボタン
+    F->>DO: AI参加リクエスト
+    DO->>DO: AIプレイヤー作成
+    DO->>F: プレイヤーリスト更新
+
+    Note over H,OpenAI: AI自動発言
+    loop ゲーム進行中
+        DO->>DO: 35秒間隔チェック
+        alt 発言条件満たす
+            DO->>AI: 発言生成要求
+            AI->>OpenAI: プロンプト送信
+            OpenAI-->>AI: 生成テキスト
+            AI->>DO: 発言メッセージ
+            DO->>F: チャットブロードキャスト
+        end
+    end
+
+    Note over H,OpenAI: AI投票・能力使用
+    alt 投票フェーズ
+        DO->>AI: 投票判断要求
+        AI->>AI: ランダム選択ロジック
+        AI->>DO: 投票メッセージ
+    else 夜フェーズ（人狼AI）
+        DO->>AI: 襲撃対象選択要求
+        AI->>AI: ランダム選択ロジック
+        AI->>DO: 能力使用メッセージ
+    end
+```
+
+## システム構成要素
+
+### フロントエンド (Next.js)
+- **役割**: ユーザーインターフェース、WebSocket通信管理
+- **主要ファイル**:
+  - `packages/frontend/src/app/page.tsx` - ホームページ（ルーム作成）
+  - `packages/frontend/src/app/layout.tsx` - レイアウトコンポーネント
+  - `packages/frontend/src/app/room/[roomId]/page.tsx` - ルームページ
+  - `packages/frontend/src/app/room/[roomId]/page.test.tsx` - ルームページテスト
+  - `packages/frontend/src/lib/openai.ts` - OpenAI API統合
+  - `packages/frontend/src/lib/utils.ts` - ユーティリティ関数
+  - `packages/frontend/src/lib/avatars.tsx` - アバター管理
+- **UIコンポーネント**:
+  - `packages/frontend/src/components/ui/button.tsx`
+  - `packages/frontend/src/components/ui/card.tsx`
+  - `packages/frontend/src/components/ui/input.tsx`
+  - `packages/frontend/src/components/ui/label.tsx`
+  - `packages/frontend/src/components/ui/modal.tsx`
+  - `packages/frontend/src/components/ui/tabs.tsx`
+- **テストファイル**:
+  - `packages/frontend/src/lib/__tests__/utils.test.ts`
+  - `packages/frontend/src/lib/__tests__/utils.pbt.test.ts`
+
+### ワーカーズ (Cloudflare Workers)
+- **役割**: API エンドポイント、WebSocket プロキシ
+- **主要ファイル**:
+  - `packages/workers/src/index.ts` - メインエントリーポイント
+  - `packages/workers/src/gameRoom.ts` - Durable Object実装
+  - `packages/workers/src/types.ts` - 型定義
+  - `packages/workers/src/utils.ts` - ユーティリティ関数
+  - `packages/workers/wrangler.toml` - Cloudflare設定
+- **テストファイル**:
+  - `packages/workers/src/__tests__/gameRoom.test.ts`
+  - `packages/workers/src/__tests__/gameRoom.pbt.test.ts`
+  - `packages/workers/src/__tests__/setup.ts`
+
+### 共有ライブラリ
+- **役割**: 型定義、ゲームロジック
+- **主要ファイル**:
+  - `packages/shared/src/index.ts` - エクスポート定義
+  - `packages/shared/src/types/game.ts` - ゲーム型定義
+  - `packages/shared/src/utils/gameUtils.ts` - ゲームロジック（役職割り当て、勝利条件判定、投票処理、プレイヤー検証など）
+- **テストファイル**:
+  - `packages/shared/src/utils/__tests__/gameUtils.test.ts`
+  - `packages/shared/src/utils/__tests__/gameUtils.pbt.test.ts`
+
+### プロジェクト設定ファイル
+- **ルートレベル**:
+  - `package.json` - プロジェクト依存関係
+  - `package-lock.json` - 依存関係ロックファイル
+  - `turbo.json` - Turborepo設定
+  - `.gitignore` - Git除外設定
+  - `README.md` - プロジェクト説明
+  - `.roorules` - システム仕様書
+- **開発スクリプト**:
+  - `start-dev.ps1` - 開発サーバー起動
+  - `test-api.ps1` - API テスト
+  - `watch-logs.ps1` - ログ監視
+- **ドキュメント**:
+  - `docs/PBT_GUIDE.md` - Property-Based Testing ガイド
+- **フロントエンド設定**:
+  - `packages/frontend/package.json` - フロントエンド依存関係
+  - `packages/frontend/next.config.js` - Next.js設定
+  - `packages/frontend/tailwind.config.js` - Tailwind CSS設定
+  - `packages/frontend/postcss.config.js` - PostCSS設定
+  - `packages/frontend/tsconfig.json` - TypeScript設定
+  - `packages/frontend/jest.config.js` - Jest設定
+  - `packages/frontend/jest.setup.js` - Jestセットアップ
+  - `packages/frontend/next-env.d.ts` - Next.js型定義
+  - `packages/frontend/.env.example` - 環境変数テンプレート
+  - `packages/frontend/src/app/globals.css` - グローバルスタイル
+- **ワーカーズ設定**:
+  - `packages/workers/package.json` - ワーカーズ依存関係
+  - `packages/workers/tsconfig.json` - TypeScript設定
+  - `packages/workers/jest.config.js` - Jest設定
+- **共有ライブラリ設定**:
+  - `packages/shared/package.json` - 共有ライブラリ依存関係
+  - `packages/shared/tsconfig.json` - TypeScript設定
+  - `packages/shared/jest.config.js` - Jest設定
+
+## WebSocket メッセージ仕様
+
+### クライアント → サーバー
+- `join_room`: ルーム参加
+- `leave_room`: ルーム離脱
+- `start_game`: ゲーム開始
+- `vote`: 投票
+- `chat`: チャット送信
+- `use_ability`: 能力使用
+
+### サーバー → クライアント
+- `game_state_update`: ゲーム状態更新
+- `player_joined`: プレイヤー参加通知
+- `player_left`: プレイヤー離脱通知
+- `divine_result`: 占い結果
+- `medium_result`: 霊媒結果
+- `ability_used`: 能力使用確認
+- `error`: エラーメッセージ
+
+# Otak Jinro システムクラス図
+
+## 1. ゲームドメインエンティティ
+
+```mermaid
+classDiagram
+    class Player {
+        +string id
+        +string name
+        +PlayerRole role
+        +boolean isAlive
+        +boolean isHost
+        +boolean isReady
+        +AIPersonality? aiPersonality
+    }
+
+    class GameState {
+        +string id
+        +GamePhase phase
+        +Player[] players
+        +number currentDay
+        +number timeRemaining
+        +Vote[] votes
+        +ChatMessage[] chatMessages
+        +NightAction[] nightActions
+        +Player? lastExecuted
+        +string? winner
+    }
+
+    class ChatMessage {
+        +string id
+        +string playerId
+        +string playerName
+        +string content
+        +number timestamp
+        +string type
+    }
+
+    class Vote {
+        +string voterId
+        +string targetId
+        +number timestamp
+    }
+
+    class NightAction {
+        +string playerId
+        +ActionType type
+        +string? targetId
+        +number timestamp
+    }
+
+    class AIPersonality {
+        +string name
+        +string description
+        +string[] traits
+        +string speakingStyle
+        +number aggressiveness
+        +number suspicion
+        +number cooperation
+        +number stress
+        +number confidence
+        +string[] suspectedPlayers
+        +string[] trustedPlayers
+    }
+
+    GameState ||--o{ Player : contains
+    GameState ||--o{ ChatMessage : contains
+    GameState ||--o{ Vote : contains
+    GameState ||--o{ NightAction : contains
+    Player ||--o| AIPersonality : has
+    Vote }o--|| Player : voter
+    Vote }o--|| Player : target
+    NightAction }o--|| Player : actor
+    ChatMessage }o--|| Player : sender
+```
+
+## 2. システムアーキテクチャクラス図
+
+```mermaid
+classDiagram
+    class GameRoom {
+        -DurableObjectState state
+        -GameState gameState
+        -Map~string,CloudflareWebSocket~ websockets
+        -Map~string,any~ timers
+        +fetch(Request) Promise~Response~
+        -handleWebSocket(Request) Promise~Response~
+        -handleRoomAPI(Request) Promise~Response~
+        -handleWebSocketMessage(string, CloudflareWebSocket) void
+        -broadcastToAll(object) void
+        -broadcastToPlayer(string, object) void
+        -saveGameState() Promise~void~
+        -loadGameState() Promise~void~
+        -startGame() void
+        -processVote(Vote) void
+        -processNightActions() void
+        -checkWinCondition() string?
+        -addAIPlayer() void
+        -handleAIActions() void
+        -assignRoles(Player[], PlayerRole[]?) Player[]
+        -getDefaultRoles(number) PlayerRole[]
+        -countVotes(Vote[]) object[]
+        -getExecutionTarget(Vote[]) string?
+        -canPlayerAct(Player, GameState, string) boolean
+        -generateRoomId() string
+        -validatePlayerName(string) boolean
+        -getTeamMembers(Player[], string) Player[]
+        -isAIPlayer(string) boolean
+        -generateAIPersonality(string) Promise~AIPersonality~
+        -generateAIResponse(string, GameState, AIPersonality) Promise~string~
+        -moderateMessage(string) Promise~boolean~
+        -determineAIResponse(GameState, Player) Promise~string~
+        -updateEmotionalState(Player, GameState) AIPersonality
+    }
+
+    class RoomPage {
+        -GameState gameState
+        -boolean isConnected
+        -string error
+        -boolean isInitializing
+        -string delayedError
+        -WebSocket ws
+        -string[] chatMessages
+        +useEffect() void
+        +connectWebSocket() void
+        +sendMessage(object) void
+        +handleVote(string) void
+        +handleChat(string) void
+        +handleAbility(string, string) void
+        +addAIPlayer() void
+        +startGame() void
+        +validateParameters() void
+        +handleDelayedError() void
+    }
+
+    class GameUtils {
+        +assignRoles(Player[], PlayerRole[]?) Player[]
+        +getDefaultRoles(number) PlayerRole[]
+        +checkWinCondition(Player[]) string?
+        +countVotes(Vote[]) object[]
+        +getExecutionTarget(Vote[]) string?
+        +canPlayerAct(Player, GameState, string) boolean
+        +generateRoomId() string
+        +validatePlayerName(string) boolean
+        +getTeamMembers(Player[], string) Player[]
+    }
+
+    class OpenAIService {
+        +generateAIPersonality(string) Promise~AIPersonality~
+        +generateAIResponse(string, GameState, AIPersonality) Promise~string~
+        +moderateMessage(string) Promise~boolean~
+        +determineAIResponse(GameState, Player) Promise~string~
+        +updateEmotionalState(Player, GameState) AIPersonality
+        +validateApiKey(string) boolean
+        +testApiKey(string) Promise~boolean~
+    }
+
+    class WorkersAPI {
+        +handleRequest(Request) Promise~Response~
+        +handleWebSocketUpgrade(Request) Promise~Response~
+        +createRoom() Promise~Response~
+        +getRoomInfo(string) Promise~Response~
+    }
+
+    GameRoom ||--|| GameState : manages
+    GameRoom ||--o{ CloudflareWebSocket : handles
+    RoomPage ||--|| WebSocket : uses
+    RoomPage ||--|| GameState : displays
+    GameUtils ..> Player : operates on
+    GameUtils ..> Vote : analyzes
+    OpenAIService ..> AIPersonality : generates
+    OpenAIService ..> Player : enhances
+    GameRoom ||--|| GameUtils : uses
+    GameRoom ||--|| OpenAIService : uses
+    WorkersAPI ||--|| GameRoom : delegates to
+```
+
+## 3. WebSocketメッセージクラス図
+
+```mermaid
+classDiagram
+    class WebSocketMessage {
+        <<abstract>>
+        +string type
+        +any data
+        +number timestamp
+    }
+
+    class ClientMessage {
+        <<abstract>>
+    }
+
+    class ServerMessage {
+        <<abstract>>
+    }
+
+    class JoinRoomMessage {
+        +string type = "join_room"
+        +string playerName
+        +string roomId
+    }
+
+    class LeaveRoomMessage {
+        +string type = "leave_room"
+    }
+
+    class StartGameMessage {
+        +string type = "start_game"
+    }
+
+    class VoteMessage {
+        +string type = "vote"
+        +string targetId
+    }
+
+    class ChatMessage {
+        +string type = "chat"
+        +string content
+    }
+
+    class UseAbilityMessage {
+        +string type = "use_ability"
+        +string abilityType
+        +string? targetId
+    }
+
+    class GameStateUpdateMessage {
+        +string type = "game_state_update"
+        +GameState gameState
+    }
+
+    class PlayerJoinedMessage {
+        +string type = "player_joined"
+        +Player player
+    }
+
+    class PlayerLeftMessage {
+        +string type = "player_left"
+        +string playerId
+    }
+
+    class DivineResultMessage {
+        +string type = "divine_result"
+        +string targetId
+        +boolean isWerewolf
+    }
+
+    class MediumResultMessage {
+        +string type = "medium_result"
+        +string targetId
+        +boolean isWerewolf
+    }
+
+    class AbilityUsedMessage {
+        +string type = "ability_used"
+        +string abilityType
+        +boolean success
+    }
+
+    class ErrorMessage {
+        +string type = "error"
+        +string message
+        +string? code
+    }
+
+    WebSocketMessage <|-- ClientMessage
+    WebSocketMessage <|-- ServerMessage
+    
+    ClientMessage <|-- JoinRoomMessage
+    ClientMessage <|-- LeaveRoomMessage
+    ClientMessage <|-- StartGameMessage
+    ClientMessage <|-- VoteMessage
+    ClientMessage <|-- ChatMessage
+    ClientMessage <|-- UseAbilityMessage
+    
+    ServerMessage <|-- GameStateUpdateMessage
+    ServerMessage <|-- PlayerJoinedMessage
+    ServerMessage <|-- PlayerLeftMessage
+    ServerMessage <|-- DivineResultMessage
+    ServerMessage <|-- MediumResultMessage
+    ServerMessage <|-- AbilityUsedMessage
+    ServerMessage <|-- ErrorMessage
+```
+
+## 4. ユーティリティとヘルパークラス図
+
+```mermaid
+classDiagram
+    class GameUtils {
+        +assignRoles(players: Player[], customRoles?: PlayerRole[]) Player[]
+        +getDefaultRoles(playerCount: number) PlayerRole[]
+        +checkWinCondition(players: Player[]) string | null
+        +countVotes(votes: Vote[]) object[]
+        +getExecutionTarget(votes: Vote[]) string | null
+        +canPlayerAct(player: Player, gameState: GameState, action: string) boolean
+        +generateRoomId() string
+        +validatePlayerName(name: string) boolean
+        +getTeamMembers(players: Player[], team: string) Player[]
+    }
+
+    class AIConstants {
+        +AI_NAMES: string[]
+        +isAIPlayer(playerName: string) boolean
+    }
+
+    GameUtils ..> Player : validates
+    GameUtils ..> Vote : analyzes
+    AIConstants ..> Player : identifies
+```
+
+## クラス関係の説明
+
+### 主要な関係性
+1. **GameRoom** は中央のコントローラーとして機能し、GameStateを管理し、WebSocket接続を処理
+2. **GameState** はゲームの状態を保持し、Player、ChatMessage、Vote、NightActionを集約
+3. **Player** は個々のプレイヤーを表現し、AIPersonalityを持つ場合がある
+4. **WebSocketMessage** の階層は、クライアント・サーバー間の通信プロトコルを定義
+5. **GameUtils** は共有ライブラリとしてゲームロジック関数を提供
+6. **OpenAIService** はAI機能を提供し、GameRoomから利用される
+
+### 設計パターン
+- **Durable Object Pattern**: GameRoomがステートフルなオブジェクトとして動作
+- **Observer Pattern**: WebSocketを通じたリアルタイム通信
+- **Strategy Pattern**: AIPersonalityによる異なる行動パターン
+- **Command Pattern**: WebSocketMessageによるアクション実行
+- **Utility Pattern**: GameUtilsによる共有ロジック提供
+
+## 実装の詳細
+
+### AI プレイヤー機能
+- **AI名前の定数**: `['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク']`
+- **AI判定関数**: `isAIPlayer(playerName: string)` でAIプレイヤーかどうかを判定
+- **OpenAI統合**: フロントエンドとワーカーズの両方でOpenAI APIを利用
+- **AI自動発言**: 35秒間隔でAIプレイヤーが自動的に発言
+- **AI投票・能力使用**: ランダム選択ロジックによる自動行動
+
+### ゲームロジック関数
+- **役職割り当て**: `assignRoles()` - プレイヤーに役職をランダム割り当て
+- **勝利条件判定**: `checkWinCondition()` - 村人勝利/人狼勝利の判定
+- **投票処理**: `countVotes()`, `getExecutionTarget()` - 投票集計と処刑対象決定
+- **プレイヤー検証**: `validatePlayerName()` - プレイヤー名の妥当性チェック
+- **チーム分け**: `getTeamMembers()` - 村人チーム/人狼チームの取得
+
+### フロントエンド実装
+- **WebSocket管理**: 接続状態、エラーハンドリング、再接続機能
+- **UI状態管理**: React Hooksによる状態管理
+- **タイマー機能**: ゲームフェーズごとの制限時間表示
+- **チャット機能**: リアルタイムメッセージング
+- **投票・能力使用UI**: フェーズに応じたインタラクション
+
+### バックエンド実装
+- **Durable Object**: ステートフルなゲームルーム管理
+- **WebSocket通信**: リアルタイム双方向通信
+- **KV Storage**: ゲーム状態の永続化
+- **AI統合**: OpenAI APIによる自動プレイヤー
