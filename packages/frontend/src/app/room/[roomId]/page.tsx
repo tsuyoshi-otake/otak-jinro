@@ -827,7 +827,7 @@ ${recentMessages}
                     disabled={isAddingAI}
                     className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-md transition-colors"
                   >
-                    {isAddingAI ? '追加中...' : '🤖 AIプレイヤーを追加'}
+                    {isAddingAI ? '追加中...' : 'AIプレイヤーを追加'}
                   </button>
                 </div>
               )}
@@ -1370,7 +1370,7 @@ ${recentMessages}
           {gameState?.phase === 'lobby' && (
             <div className="bg-blue-900/20 p-3 rounded">
               <p className="text-blue-300 text-sm">
-                💡 ゲームを始めるには最低4人のプレイヤーが必要です。
+                ゲームを始めるには最低4人のプレイヤーが必要です。
                 AIプレイヤーを追加して人数を増やしましょう！
               </p>
             </div>
@@ -1380,7 +1380,7 @@ ${recentMessages}
             <div className="space-y-3">
               <div className="bg-yellow-900/20 p-3 rounded">
                 <p className="text-yellow-300 text-sm">
-                  💡 昼フェーズ: みんなで話し合って怪しい人を見つけましょう。
+                  昼フェーズ: みんなで話し合って怪しい人を見つけましょう。
                   発言の矛盾や不自然な行動に注目！
                 </p>
               </div>

@@ -174,7 +174,7 @@ export default function HomePage() {
               disabled={isLoading || !playerName.trim() || !roomId.trim()}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? '参加中...' : '🚪 ルームに参加'}
+              {isLoading ? '参加中...' : 'ルームに参加'}
             </button>
           </div>
         </div>
