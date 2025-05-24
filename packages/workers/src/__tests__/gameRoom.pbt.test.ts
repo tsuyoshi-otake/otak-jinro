@@ -263,26 +263,18 @@ describe('GameRoom - Property-Based Tests', () => {
     it('プロパティ: WebSocketメッセージは適切な構造を持つ', () => {
       fc.assert(fc.property(
         messageTypeArb,
-        fc.string({ minLength: 1, maxLength: 20 }), // roomId
+        fc.string({ minLength: 1, maxLength: 20 }).filter(s => s.trim().length > 0), // roomId (空白のみを除外)
         (messageType, roomId) => {
           const baseMessage = {
             type: messageType,
-            roomId
+            roomId: roomId.trim()
           };
 
-          // メッセージタイプに応じて追加プロパティを検証
-          switch (messageType) {
-            case 'join_room':
-              return typeof baseMessage.type === 'string' && typeof baseMessage.roomId === 'string';
-            case 'chat':
-              return typeof baseMessage.type === 'string' && typeof baseMessage.roomId === 'string';
-            case 'vote':
-              return typeof baseMessage.type === 'string' && typeof baseMessage.roomId === 'string';
-            case 'use_ability':
-              return typeof baseMessage.type === 'string' && typeof baseMessage.roomId === 'string';
-            default:
-              return typeof baseMessage.type === 'string' && typeof baseMessage.roomId === 'string';
-          }
+          // 基本的なメッセージ構造を検証
+          const hasValidType = typeof baseMessage.type === 'string' && baseMessage.type.length > 0;
+          const hasValidRoomId = typeof baseMessage.roomId === 'string' && baseMessage.roomId.length > 0;
+          
+          return hasValidType && hasValidRoomId;
         }
       ));
     });

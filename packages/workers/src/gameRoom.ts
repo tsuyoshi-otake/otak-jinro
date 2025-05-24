@@ -59,6 +59,11 @@ export class GameRoom implements DurableObject {
     this.websockets.set(playerId, server);
     
     server.addEventListener('message', async (event: MessageEvent) => {
+      // Origin validation for security
+      if (event.origin && event.origin !== new URL(request.url).origin) {
+        console.warn('Message from unauthorized origin:', event.origin);
+        return;
+      }
       try {
         const message: WebSocketMessage = JSON.parse(event.data as string);
         console.log('Received WebSocket message:', JSON.stringify(message));
@@ -449,16 +454,26 @@ export class GameRoom implements DurableObject {
     if (player.isAlive && this.gameState.phase === 'night') {
       switch (player.role) {
         case 'werewolf':
-          canAct = true; // 人狼は夜に襲撃可能
+          // 人狼は夜に襲撃可能（既に襲撃していない場合）
+          canAct = !this.gameState.nightActions?.some(action =>
+            action.type === 'attack' && action.actorId === playerId
+          );
           break;
         case 'seer':
-          canAct = true; // 占い師は夜に占い可能
+          // 占い師は夜に占い可能（1回のみ）
+          canAct = !this.gameState.nightActions?.some(action =>
+            action.type === 'divine' && action.actorId === playerId
+          );
           break;
         case 'hunter':
-          canAct = true; // 狩人は夜に護衛可能
+          // 狩人は夜に護衛可能（1回のみ）
+          canAct = !this.gameState.nightActions?.some(action =>
+            action.type === 'guard' && action.actorId === playerId
+          );
           break;
         case 'medium':
-          canAct = true; // 霊媒師は夜に能力使用可能
+          // 霊媒師は前日に処刑者がいる場合のみ能力使用可能
+          canAct = !!this.gameState.lastExecuted;
           break;
         default:
           canAct = false;

@@ -206,7 +206,7 @@ describe('utils - Property-Based Tests', () => {
           
           // twMergeによる重複除去やTailwind競合解決があるため、
           // 単純な包含チェックではなく、結果が有効な文字列であることを確認
-          return result.length >= 0 && !result.includes('  '); // 連続空白なし
+          return typeof result === 'string' && !result.includes('  '); // 連続空白なし
         }
       ));
     });
