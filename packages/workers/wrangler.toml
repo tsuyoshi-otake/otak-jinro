@@ -6,6 +6,14 @@ compatibility_flags = ["nodejs_compat"]
 [env.production]
 name = "otak-jinro-workers"
 
+[[env.production.durable_objects.bindings]]
+name = "GAME_ROOMS"
+class_name = "GameRoom"
+
+[[env.production.kv_namespaces]]
+binding = "PLAYER_DATA"
+id = "9e01ad23ddb04f289d0614e8a4a018f8"
+
 [env.staging]
 name = "otak-jinro-workers-staging"
 
