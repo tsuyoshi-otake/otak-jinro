@@ -165,7 +165,7 @@ export function generateRoomId(): string {
  * Validate player name
  */
 export function validatePlayerName(name: string): boolean {
-  return name.length >= 2 && name.length <= 20 && /^[a-zA-Z0-9あ-んア-ン一-龯\s]+$/.test(name);
+  return name.length >= 2 && name.length <= 20 && /^[a-zA-Z0-9あ-んア-ヶー一-龯\s]+$/.test(name);
 }
 
 /**
