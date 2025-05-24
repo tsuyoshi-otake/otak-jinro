@@ -1,11 +1,12 @@
 # otak-jinro (人狼ゲーム)
 
-Next.js + Cloudflare Workers を使用したリアルタイム人狼ゲーム
+Next.js フロントエンド + Cloudflare Workers バックエンドを使用したリアルタイム人狼ゲーム
 
 ## 目次
 
 - [概要](#概要)
 - [技術スタック](#技術スタック)
+- [デプロイメント構成](#デプロイメント構成)
 - [プロジェクト構造](#プロジェクト構造)
 - [セットアップ](#セットアップ)
 - [開発環境](#開発環境)
@@ -16,29 +17,32 @@ Next.js + Cloudflare Workers を使用したリアルタイム人狼ゲーム
 
 ## 概要
 
-otak-jinroは、Cloudflare WorkersとNext.jsを使用して構築されたリアルタイムオンライン人狼ゲームです。WebSocketを使用したリアルタイム通信により、複数のプレイヤーが同時にゲームを楽しむことができます。
+otak-jinroは、Next.jsフロントエンドとCloudflare Workersバックエンドを使用して構築されたリアルタイムオンライン人狼ゲームです。WebSocketを使用したリアルタイム通信により、複数のプレイヤーが同時にゲームを楽しむことができます。
 
 ### 主な特徴
 
 - **リアルタイムマルチプレイヤー**: WebSocketによる即座の状態同期
-- **スケーラブル**: Cloudflare Workersのエッジコンピューティング
+- **スケーラブルバックエンド**: Cloudflare Workersのエッジコンピューティング
 - **モダンUI**: Next.js 14 + Tailwind CSSによるレスポンシブデザイン
 - **型安全**: TypeScriptによる堅牢な開発
 - **モノレポ**: Turboによる効率的な開発環境
+- **AI プレイヤー**: OpenAI APIを使用した自動プレイヤー
 
 ## 技術スタック
 
-### Frontend
+### Frontend (通常デプロイ)
 - **Next.js 14** (App Router)
 - **TypeScript**
 - **Tailwind CSS**
 - **WebSocket API**
+- **OpenAI API** (AI プレイヤー機能)
 
-### Backend
+### Backend (Cloudflare Workers)
 - **Cloudflare Workers**
 - **Durable Objects** (ゲーム状態管理)
 - **Cloudflare KV** (プレイヤーデータ)
 - **WebSocket API** (リアルタイム通信)
+- **OpenAI API** (AI プレイヤー機能)
 
 ### 共通
 - **TypeScript** (型定義共有)
@@ -48,6 +52,18 @@ otak-jinroは、Cloudflare WorkersとNext.jsを使用して構築されたリア
 - **Jest** (ユニットテスト)
 - **fast-check** (Property-Based Testing)
 - **TypeScript** (型安全テスト)
+
+## デプロイメント構成
+
+### フロントエンド
+- **デプロイ先**: 通常のホスティングサービス（Vercel、Netlify等）
+- **ビルド**: 標準的なNext.jsアプリケーション
+- **通信**: Cloudflare WorkersのAPIエンドポイントと通信
+
+### バックエンド
+- **デプロイ先**: Cloudflare Workers
+- **機能**: ゲームロジック、WebSocket通信、AI プレイヤー
+- **ストレージ**: Durable Objects + KV Storage
 
 ## プロジェクト構造
 
@@ -131,10 +147,42 @@ otak-jinro/
    npm install
    ```
 
-3. **開発環境起動**
+3. **環境変数設定**
+   ```bash
+   # フロントエンド環境変数
+   cd packages/frontend
+   cp .env.example .env.local
+   # 必要に応じて .env.local を編集
+   ```
+
+4. **開発環境起動**
    ```powershell
    powershell -ExecutionPolicy Bypass -File start-dev.ps1
    ```
+
+### デプロイメント
+
+#### フロントエンド（通常デプロイ）
+```bash
+# ビルド
+cd packages/frontend
+npm run build
+
+# 任意のホスティングサービスにデプロイ
+# 例: Vercel
+npx vercel --prod
+
+# 例: Netlify
+npm install -g netlify-cli
+netlify deploy --prod --dir=.next
+```
+
+#### バックエンド（Cloudflare Workers）
+```bash
+# Cloudflare Workers にデプロイ
+cd packages/workers
+npx wrangler deploy
+```
 
 ### 開発スクリプトの使用順序
 
@@ -291,7 +339,7 @@ npm run test:coverage            # カバレッジ付きテスト
 
 ## API仕様
 
-### REST API
+### REST API（Cloudflare Workers バックエンド）
 
 #### ヘルスチェック
 ```http
@@ -332,11 +380,15 @@ Content-Type: application/json
 GET /api/rooms/{roomId}
 ```
 
-### WebSocket API
+### WebSocket API（Cloudflare Workers バックエンド）
 
 #### 接続
 ```
+# 開発環境
 ws://localhost:8787/api/rooms/{roomId}/ws
+
+# 本番環境
+wss://your-workers-domain.workers.dev/api/rooms/{roomId}/ws
 ```
 
 #### メッセージ形式
@@ -374,6 +426,34 @@ ws://localhost:8787/api/rooms/{roomId}/ws
     "targetId": "プレイヤーID"
   }
 }
+```
+
+**能力使用**
+```json
+{
+  "type": "use_ability",
+  "roomId": "ABCDEF",
+  "ability": {
+    "type": "attack|divine|guard|medium",
+    "targetId": "プレイヤーID"
+  }
+}
+```
+
+### フロントエンド環境変数
+
+#### 開発環境（.env.local）
+```env
+NEXT_PUBLIC_WORKERS_URL=http://localhost:8787
+NEXT_PUBLIC_WS_URL=ws://localhost:8787
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+#### 本番環境
+```env
+NEXT_PUBLIC_WORKERS_URL=https://your-workers-domain.workers.dev
+NEXT_PUBLIC_WS_URL=wss://your-workers-domain.workers.dev
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 ## ゲーム仕様
@@ -690,6 +770,36 @@ npm run build
 
 - **SystemExe Research and Development**
 
+### 2025/05/25 - デプロイメント構成変更
+
+#### 変更内容
+1. **フロントエンドデプロイメント変更**
+   - Cloudflare Pages から通常のNext.jsデプロイメントに変更
+   - Vercel、Netlify等の標準的なホスティングサービス対応
+   - `@cloudflare/next-on-pages` 依存関係は維持（互換性のため）
+
+2. **バックエンドは継続してCloudflare Workers使用**
+   - Durable Objects によるゲーム状態管理
+   - WebSocket通信とリアルタイム機能
+   - AI プレイヤー機能（OpenAI API統合）
+
+3. **環境変数とAPI通信の明確化**
+   - フロントエンドからCloudflare Workers APIへの通信
+   - 開発環境と本番環境の適切な分離
+   - WebSocket接続の環境別設定
+
+#### 修正されたファイル
+- `packages/frontend/next.config.js` - Cloudflare特有設定を削除
+- `packages/frontend/.env.example` - 環境変数テンプレート更新
+- `.roorules` - システム仕様書の完全更新
+- `README.md` - デプロイメント手順とAPI仕様の更新
+
+#### 技術的利点
+- **フロントエンド**: より柔軟なデプロイメント選択肢
+- **バックエンド**: Cloudflare Workersの高性能を維持
+- **開発効率**: 標準的なNext.jsワークフローの活用
+- **保守性**: 環境分離による明確な責任分担
+
 ### 2025/05/24 - AI投票機能実装
 
 #### 実装内容
@@ -870,4 +980,40 @@ export function getExecutionTarget(votes: Vote[]): string | null;
 
 ---
 
-**最終更新**: 2025/05/24 18:09 JST
+**最終更新**: 2025/05/25 08:24 JST
+
+## アーキテクチャ概要
+
+### システム構成
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    フロントエンド                              │
+│                 (通常デプロイ)                                │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              Next.js 14                                 │ │
+│  │         + Tailwind CSS                                  │ │
+│  │         + TypeScript                                    │ │
+│  │         + WebSocket Client                              │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ HTTP/WebSocket
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Cloudflare Workers                          │
+│                   (バックエンド)                              │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │           Durable Objects                               │ │
+│  │         + WebSocket Server                              │ │
+│  │         + Game Logic                                    │ │
+│  │         + AI Players (OpenAI)                           │ │
+│  │         + KV Storage                                    │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### デプロイメント戦略
+- **フロントエンド**: Vercel、Netlify等の標準的なNext.jsホスティング
+- **バックエンド**: Cloudflare Workersによる高性能エッジコンピューティング
+- **通信**: フロントエンドからCloudflare Workers APIへの直接通信
+- **状態管理**: Durable Objectsによるリアルタイムゲーム状態管理

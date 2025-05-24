@@ -5,14 +5,14 @@
 ```mermaid
 sequenceDiagram
     participant U as User (Browser)
-    participant F as Frontend (Next.js)
-    participant W as Workers (Cloudflare)
+    participant F as Frontend (Next.js - 通常デプロイ)
+    participant W as Workers (Cloudflare Workers)
     participant DO as Durable Object (GameRoom)
     participant KV as KV Storage
 
     Note over U,KV: ルーム作成フロー
     U->>F: ルーム作成リクエスト
-    F->>W: POST /api/rooms
+    F->>W: POST /api/rooms (Cloudflare Workers)
     W->>DO: 新しいGameRoomインスタンス作成
     DO->>KV: ゲーム状態保存
     DO-->>W: ルームID返却
