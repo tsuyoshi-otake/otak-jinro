@@ -1,0 +1,37 @@
+{
+  "jest.jestCommandLine": "npm test",
+  "jest.autoRun": {
+    "watch": false,
+    "onStartup": ["all-tests"]
+  },
+  "jest.showCoverageOnLoad": true,
+  "jest.coverageFormatter": "DefaultFormatter",
+  "jest.rootPath": ".",
+  "jest.testMatch": [
+    "**/packages/**/src/**/__tests__/**/*.{js,jsx,ts,tsx}",
+    "**/packages/**/src/**/?(*.)+(spec|test).{js,jsx,ts,tsx}"
+  ],
+  "jest.workspaceFolder": ".",
+  "jest.disabledWorkspaceFolders": [],
+  "jest.enabledWorkspaceFolders": [
+    "packages/shared",
+    "packages/workers", 
+    "packages/frontend"
+  ],
+  "typescript.preferences.includePackageJsonAutoImports": "on",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.next": true,
+    "**/dist": true,
+    "**/coverage": true
+  },
+  "testing.automaticallyOpenPeekView": "never",
+  "testing.openTesting": "neverOpen",
+  "cSpell.words": [
+    "chcp"
+  ],
+  "testing.automaticallyOpenTestResults": "neverOpen"
+}

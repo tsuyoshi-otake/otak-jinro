@@ -1,0 +1,12 @@
+{
+  "jest.jestCommandLine": "npm test",
+  "jest.rootPath": ".",
+  "jest.testMatch": [
+    "src/**/__tests__/**/*.{js,jsx,ts,tsx}",
+    "src/**/?(*.)+(spec|test).{js,jsx,ts,tsx}"
+  ],
+  "jest.autoRun": {
+    "watch": false,
+    "onStartup": ["all-tests"]
+  }
+}
