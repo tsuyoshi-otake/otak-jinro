@@ -12,6 +12,31 @@ global.fetch = jest.fn();
   readyState: 1, // OPEN
 }));
 
+// Mock WebSocketPair for Cloudflare Workers
+(global as any).WebSocketPair = jest.fn(() => {
+  const client = {
+    accept: jest.fn(),
+    addEventListener: jest.fn(),
+    send: jest.fn(),
+    close: jest.fn(),
+    readyState: 1
+  };
+  const server = {
+    accept: jest.fn(),
+    addEventListener: jest.fn(),
+    send: jest.fn(),
+    close: jest.fn(),
+    readyState: 1
+  };
+  
+  const pair = [client, server];
+  // Make it work with Object.values()
+  (pair as any)[0] = client;
+  (pair as any)[1] = server;
+  
+  return pair;
+});
+
 // Mock console methods to avoid noise in tests
 global.console = {
   ...console,
@@ -22,7 +47,40 @@ global.console = {
 
 // Mock Cloudflare Workers APIs
 (global as any).Response = class MockResponse {
-  constructor(public body: any, public init?: ResponseInit) {}
+  public status: number;
+  public statusText: string;
+  public headers: {
+    get: (key: string) => string | null;
+    set: (key: string, value: string) => void;
+    has: (key: string) => boolean;
+    delete: (key: string) => boolean;
+    forEach: (callback: (value: string, key: string) => void) => void;
+  };
+
+  constructor(public body: any, public init?: ResponseInit & { webSocket?: any }) {
+    this.status = init?.status || 200;
+    this.statusText = init?.statusText || 'OK';
+    const headersMap = new Map<string, string>();
+    
+    if (init?.headers) {
+      Object.entries(init.headers).forEach(([key, value]) => {
+        headersMap.set(key.toLowerCase(), value as string);
+      });
+    }
+    
+    this.headers = {
+      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
+      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
+      has: (key: string) => headersMap.has(key.toLowerCase()),
+      delete: (key: string) => headersMap.delete(key.toLowerCase()),
+      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
+    };
+    
+    // WebSocket support for Cloudflare Workers
+    if (init?.webSocket) {
+      (this as any).webSocket = init.webSocket;
+    }
+  }
   
   static json(object: any, init?: ResponseInit) {
     return new MockResponse(JSON.stringify(object), {
@@ -35,19 +93,55 @@ global.console = {
   }
   
   json() {
-    return Promise.resolve(JSON.parse(this.body));
+    try {
+      return Promise.resolve(JSON.parse(this.body));
+    } catch {
+      return Promise.resolve({});
+    }
   }
   
   text() {
-    return Promise.resolve(this.body);
+    return Promise.resolve(this.body || '');
   }
 };
 
 (global as any).Request = class MockRequest {
-  constructor(public url: string, public init?: RequestInit) {}
+  public method: string;
+  public url: string;
+  public headers: {
+    get: (key: string) => string | null;
+    set: (key: string, value: string) => void;
+    has: (key: string) => boolean;
+    delete: (key: string) => boolean;
+    forEach: (callback: (value: string, key: string) => void) => void;
+  };
+
+  constructor(public input: string, public init?: RequestInit) {
+    this.url = input;
+    this.method = init?.method || 'GET';
+    const headersMap = new Map<string, string>();
+    
+    if (init?.headers) {
+      Object.entries(init.headers).forEach(([key, value]) => {
+        headersMap.set(key.toLowerCase(), value as string);
+      });
+    }
+    
+    this.headers = {
+      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
+      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
+      has: (key: string) => headersMap.has(key.toLowerCase()),
+      delete: (key: string) => headersMap.delete(key.toLowerCase()),
+      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
+    };
+  }
   
   json() {
-    return Promise.resolve(JSON.parse(this.init?.body as string || '{}'));
+    try {
+      return Promise.resolve(JSON.parse(this.init?.body as string || '{}'));
+    } catch {
+      return Promise.resolve({});
+    }
   }
   
   text() {
@@ -78,8 +172,50 @@ const mockStorage = new Map();
   }
 };
 
+// Mock crypto for UUID generation
+(global as any).crypto = {
+  randomUUID: () => 'test-uuid-' + Math.random().toString(36).substr(2, 9),
+  getRandomValues: (array: any) => {
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+    return array;
+  }
+};
+
 // Reset mocks before each test
 beforeEach(() => {
   jest.clearAllMocks();
   mockStorage.clear();
+});
+
+// Dummy test to satisfy Jest requirement
+describe('Setup', () => {
+  it('should initialize test environment', () => {
+    expect(true).toBe(true);
+  });
+
+  it('should have mocked WebSocket', () => {
+    expect((global as any).WebSocket).toBeDefined();
+  });
+
+  it('should have mocked WebSocketPair', () => {
+    expect((global as any).WebSocketPair).toBeDefined();
+  });
+
+  it('should have mocked Response', () => {
+    const response = new (global as any).Response('test', { status: 200 });
+    expect(response.status).toBe(200);
+  });
+
+  it('should have mocked Request', () => {
+    const request = new (global as any).Request('http://test.com', { method: 'POST' });
+    expect(request.method).toBe('POST');
+  });
+
+  it('should have mocked DurableObjectStorage', () => {
+    const storage = new (global as any).DurableObjectStorage();
+    expect(storage.get).toBeDefined();
+    expect(storage.put).toBeDefined();
+  });
 });

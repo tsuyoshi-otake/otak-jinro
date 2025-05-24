@@ -1,8 +1,8 @@
 // Export type definitions
-export * from './types/game.js';
+export * from './types/game';
 
 // Export utility functions
-export * from './utils/gameUtils.js';
+export * from './utils/gameUtils';
 
 // Constants definition
 export const GAME_CONSTANTS = {
