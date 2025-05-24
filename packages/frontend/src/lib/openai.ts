@@ -200,7 +200,7 @@ ${personalityContext}
         }
       ],
       temperature: 0.8,
-      max_completion_tokens: 100,
+      max_tokens: 100,
       top_p: 0.9,
       frequency_penalty: 0.3,
       presence_penalty: 0.3
@@ -263,7 +263,7 @@ AIプレイヤー「${playerName}」の詳細な個性を生成してくださ�
         }
       ],
       temperature: 0.9,
-      max_completion_tokens: 400,
+      max_tokens: 400,
       response_format: { type: "json_object" }
     });
 
@@ -341,7 +341,7 @@ export async function moderateMessage(apiKey: string, message: string): Promise<
         }
       ],
       temperature: 0.2,
-      max_completion_tokens: 120,
+        max_tokens: 120,
       top_p: 0.8,
       frequency_penalty: 0,
       presence_penalty: 0
@@ -423,7 +423,7 @@ JSON形式で回答してください：
         }
       ],
       temperature: 0.3,
-      max_completion_tokens: 200,
+        max_tokens: 200,
       response_format: { type: "json_object" }
     });
 
