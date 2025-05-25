@@ -1,42 +1,5 @@
 // Jest setup file for Workers tests
 
-// Mock Cloudflare Workers environment
-global.fetch = jest.fn();
-
-// Mock WebSocket
-(global as any).WebSocket = jest.fn().mockImplementation(() => ({
-  send: jest.fn(),
-  close: jest.fn(),
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn(),
-  readyState: 1, // OPEN
-}));
-
-// Mock WebSocketPair for Cloudflare Workers
-(global as any).WebSocketPair = jest.fn(() => {
-  const client = {
-    accept: jest.fn(),
-    addEventListener: jest.fn(),
-    send: jest.fn(),
-    close: jest.fn(),
-    readyState: 1
-  };
-  const server = {
-    accept: jest.fn(),
-    addEventListener: jest.fn(),
-    send: jest.fn(),
-    close: jest.fn(),
-    readyState: 1
-  };
-  
-  const pair = [client, server];
-  // Make it work with Object.values()
-  (pair as any)[0] = client;
-  (pair as any)[1] = server;
-  
-  return pair;
-});
-
 // Mock console methods to avoid noise in tests
 global.console = {
   ...console,
@@ -45,19 +8,89 @@ global.console = {
   error: jest.fn(),
 };
 
+// Mock WebSocket class
+class MockWebSocket {
+  send = jest.fn();
+  close = jest.fn();
+  addEventListener = jest.fn();
+  removeEventListener = jest.fn();
+  readyState = 1; // OPEN
+  accept = jest.fn();
+  
+  constructor() {
+    // WebSocket is ready immediately in tests
+    setTimeout(() => {
+      if (this.addEventListener.mock.calls.length > 0) {
+        this.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'open') {
+            handler({ type: 'open' });
+          }
+        });
+      }
+    }, 0);
+  }
+}
+
+// Mock WebSocketPair that returns two connected WebSocket instances
+class MockWebSocketPair {
+  constructor() {
+    const client = new MockWebSocket();
+    const server = new MockWebSocket();
+    
+    // Link the sockets so they can communicate
+    client.send = jest.fn((data) => {
+      // Simulate message being received by server
+      setTimeout(() => {
+        server.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'message') {
+            handler({ type: 'message', data });
+          }
+        });
+      }, 0);
+    });
+    
+    server.send = jest.fn((data) => {
+      // Simulate message being received by client
+      setTimeout(() => {
+        client.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'message') {
+            handler({ type: 'message', data });
+          }
+        });
+      }, 0);
+    });
+    
+    // Return array-like object that Object.values() can work with
+    const pair = Object.assign([client, server], {
+      0: client,
+      1: server,
+      length: 2
+    });
+    
+    return pair;
+  }
+}
+
+// Set up global mocks
+(global as any).WebSocket = MockWebSocket;
+(global as any).WebSocketPair = MockWebSocketPair;
+
+// Mock fetch
+global.fetch = jest.fn();
+
 // Mock Headers class
 (global as any).Headers = class MockHeaders {
   private headersMap = new Map<string, string>();
 
-  constructor(init?: Record<string, string> | Map<string, string> | Headers) {
+  constructor(init?: any) {
     if (init) {
-      if (init instanceof Map) {
-        init.forEach((value, key) => {
+      if (init instanceof MockHeaders) {
+        init.forEach((value: string, key: string) => {
           this.headersMap.set(key.toLowerCase(), value);
         });
       } else if (typeof init === 'object') {
         Object.entries(init).forEach(([key, value]) => {
-          this.headersMap.set(key.toLowerCase(), value);
+          this.headersMap.set(key.toLowerCase(), value as string);
         });
       }
     }
@@ -96,24 +129,25 @@ global.console = {
   }
 };
 
-// Mock Cloudflare Workers APIs
+// Mock Response class
 (global as any).Response = class MockResponse {
   public status: number;
   public statusText: string;
   public headers: any;
+  public webSocket?: any;
 
-  constructor(public body: any, public init?: ResponseInit & { webSocket?: any }) {
+  constructor(public body: any, public init?: any) {
     this.status = init?.status || 200;
     this.statusText = init?.statusText || 'OK';
     this.headers = new (global as any).Headers(init?.headers);
     
     // WebSocket support for Cloudflare Workers
     if (init?.webSocket) {
-      (this as any).webSocket = init.webSocket;
+      this.webSocket = init.webSocket;
     }
   }
   
-  static json(object: any, init?: ResponseInit) {
+  static json(object: any, init?: any) {
     return new MockResponse(JSON.stringify(object), {
       ...init,
       headers: {
@@ -136,12 +170,13 @@ global.console = {
   }
 };
 
+// Mock Request class
 (global as any).Request = class MockRequest {
   public method: string;
   public url: string;
   public headers: any;
 
-  constructor(public input: string, public init?: RequestInit) {
+  constructor(public input: string, public init?: any) {
     this.url = input;
     this.method = init?.method || 'GET';
     this.headers = new (global as any).Headers(init?.headers);
@@ -181,6 +216,31 @@ const mockStorage = new Map();
   list() {
     return Promise.resolve(mockStorage);
   }
+  
+  deleteAll() {
+    mockStorage.clear();
+    return Promise.resolve();
+  }
+  
+  transaction(fn: any) {
+    return Promise.resolve(fn(this));
+  }
+  
+  getAlarm() {
+    return Promise.resolve(null);
+  }
+  
+  setAlarm() {
+    return Promise.resolve();
+  }
+  
+  deleteAlarm() {
+    return Promise.resolve();
+  }
+  
+  sync() {
+    return Promise.resolve();
+  }
 };
 
 // Mock crypto for UUID generation
@@ -207,11 +267,17 @@ describe('Setup', () => {
   });
 
   it('should have mocked WebSocket', () => {
-    expect((global as any).WebSocket).toBeDefined();
+    const ws = new (global as any).WebSocket();
+    expect(ws.send).toBeDefined();
+    expect(ws.close).toBeDefined();
+    expect(ws.addEventListener).toBeDefined();
   });
 
   it('should have mocked WebSocketPair', () => {
-    expect((global as any).WebSocketPair).toBeDefined();
+    const pair = new (global as any).WebSocketPair();
+    expect(pair).toHaveLength(2);
+    expect(pair[0]).toBeDefined();
+    expect(pair[1]).toBeDefined();
   });
 
   it('should have mocked Response', () => {

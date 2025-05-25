@@ -11,25 +11,48 @@ global.Response = class MockResponse {
   public status: number;
   public statusText: string;
   public headers: any;
+  public webSocket?: any;
 
   constructor(public body: any, public init?: any) {
     this.status = init?.status || 200;
     this.statusText = init?.statusText || 'OK';
     
-    const headersMap = new Map<string, string>();
-    if (init?.headers) {
-      Object.entries(init.headers).forEach(([key, value]) => {
-        headersMap.set(key.toLowerCase(), value as string);
-      });
+    // WebSocket support for status 101
+    if (init?.webSocket) {
+      this.webSocket = init.webSocket;
     }
     
-    this.headers = {
-      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
-      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
-      has: (key: string) => headersMap.has(key.toLowerCase()),
-      delete: (key: string) => headersMap.delete(key.toLowerCase()),
-      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
-    };
+    // Handle both Headers instances and plain objects
+    if (init?.headers) {
+      if (init.headers instanceof Headers || (init.headers.get && typeof init.headers.get === 'function')) {
+        // It's a Headers instance or mock Headers
+        this.headers = init.headers;
+      } else {
+        // It's a plain object
+        const headersMap = new Map<string, string>();
+        Object.entries(init.headers).forEach(([key, value]) => {
+          headersMap.set(key.toLowerCase(), value as string);
+        });
+        
+        this.headers = {
+          get: (key: string) => headersMap.get(key.toLowerCase()) || null,
+          set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
+          has: (key: string) => headersMap.has(key.toLowerCase()),
+          delete: (key: string) => headersMap.delete(key.toLowerCase()),
+          forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
+        };
+      }
+    } else {
+      // No headers provided
+      const headersMap = new Map<string, string>();
+      this.headers = {
+        get: (key: string) => headersMap.get(key.toLowerCase()) || null,
+        set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
+        has: (key: string) => headersMap.has(key.toLowerCase()),
+        delete: (key: string) => headersMap.delete(key.toLowerCase()),
+        forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
+      };
+    }
   }
   
   static json(object: any, init?: any) {
@@ -257,14 +280,35 @@ describe('Utils', () => {
   });
 
   describe('addCorsHeaders', () => {
-    it.skip('CORSヘッダーを追加する', async () => {
-      // このテストは現在のMock実装では動作しないためスキップ
-      expect(true).toBe(true);
+    it('CORSヘッダーを追加する', async () => {
+      // Headersオブジェクトを作成
+      const originalHeaders = new Headers({ 'Original-Header': 'value' });
+      const originalResponse = new Response('test body', {
+        status: 200,
+        headers: originalHeaders
+      });
+
+      const corsResponse = addCorsHeaders(originalResponse);
+
+      expect(corsResponse.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(corsResponse.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, PUT, DELETE, OPTIONS');
+      expect(corsResponse.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type, Authorization');
+      expect(corsResponse.headers.get('Original-Header')).toBe('value');
+      
+      // ボディが保持されていることを確認
+      const body = await corsResponse.text();
+      expect(body).toBe('test body');
     });
 
-    it.skip('カスタムCORSオリジンを設定する', () => {
-      // このテストは現在のMock実装では動作しないためスキップ
-      expect(true).toBe(true);
+    it('カスタムCORSオリジンを設定する', () => {
+      const originalResponse = new Response('test body', {
+        headers: new Headers()
+      });
+      const customOrigin = 'https://example.com';
+
+      const corsResponse = addCorsHeaders(originalResponse, customOrigin);
+
+      expect(corsResponse.headers.get('Access-Control-Allow-Origin')).toBe(customOrigin);
     });
 
     it('元のレスポンスのステータスとボディを保持する', async () => {
@@ -299,10 +343,14 @@ describe('Utils', () => {
       // APIレスポンスを作成
       const response = createApiResponse(true, { roomId });
       
-      expect(response.status).toBe(200);
+      // CORSヘッダーを追加
+      const finalResponse = addCorsHeaders(response);
       
-      // レスポンスボディを確認
-      const body = await response.json();
+      expect(finalResponse.status).toBe(200);
+      expect(finalResponse.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      
+      // レスポンスボディも確認
+      const body = await finalResponse.json();
       expect(body.success).toBe(true);
       expect(body.data.roomId).toBe(roomId);
     });

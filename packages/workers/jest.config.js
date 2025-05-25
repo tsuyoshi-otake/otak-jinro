@@ -10,6 +10,7 @@ module.exports = {
     'src/__tests__/gameRoom.pbt.test.ts',
     'src/__tests__/setup.ts'
   ],
+  // setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'], // 一時的に無効化
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: {

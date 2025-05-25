@@ -1,5 +1,189 @@
 import { GameRoom } from '../gameRoom';
 
+// WebSocket mock implementation
+class MockWebSocket {
+  send = jest.fn();
+  close = jest.fn();
+  addEventListener = jest.fn();
+  removeEventListener = jest.fn();
+  readyState = 1; // OPEN
+  accept = jest.fn();
+  
+  constructor() {
+    // WebSocket is ready immediately in tests
+    setTimeout(() => {
+      if (this.addEventListener.mock.calls.length > 0) {
+        this.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'open') {
+            handler({ type: 'open' });
+          }
+        });
+      }
+    }, 0);
+  }
+}
+
+// WebSocketPair mock implementation
+class MockWebSocketPair {
+  constructor() {
+    const client = new MockWebSocket();
+    const server = new MockWebSocket();
+    
+    // Link the sockets so they can communicate
+    client.send = jest.fn((data) => {
+      setTimeout(() => {
+        server.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'message') {
+            handler({ type: 'message', data });
+          }
+        });
+      }, 0);
+    });
+    
+    server.send = jest.fn((data) => {
+      setTimeout(() => {
+        client.addEventListener.mock.calls.forEach(([event, handler]) => {
+          if (event === 'message') {
+            handler({ type: 'message', data });
+          }
+        });
+      }, 0);
+    });
+    
+    // Return array-like object that Object.values() can work with
+    const pair = Object.assign([client, server], {
+      0: client,
+      1: server,
+      length: 2
+    });
+    
+    return pair;
+  }
+}
+
+// Set up global WebSocket mocks
+(global as any).WebSocket = MockWebSocket;
+(global as any).WebSocketPair = MockWebSocketPair;
+
+// Mock Response class to support status 101
+global.Response = class MockResponse {
+  public status: number;
+  public statusText: string;
+  public headers: any;
+  public webSocket?: any;
+
+  constructor(public body: any, public init?: any) {
+    this.status = init?.status || 200;
+    this.statusText = init?.statusText || 'OK';
+    
+    // WebSocket support for status 101
+    if (init?.webSocket) {
+      this.webSocket = init.webSocket;
+    }
+    
+    const headersMap = new Map<string, string>();
+    if (init?.headers) {
+      Object.entries(init.headers).forEach(([key, value]) => {
+        headersMap.set(key.toLowerCase(), value as string);
+      });
+    }
+    
+    this.headers = {
+      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
+      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
+      has: (key: string) => headersMap.has(key.toLowerCase()),
+      delete: (key: string) => headersMap.delete(key.toLowerCase()),
+      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
+    };
+  }
+  
+  static json(object: any, init?: any) {
+    return new MockResponse(JSON.stringify(object), {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  }
+  
+  json() {
+    try {
+      return Promise.resolve(JSON.parse(this.body));
+    } catch {
+      return Promise.resolve({});
+    }
+  }
+  
+  text() {
+    return Promise.resolve(this.body || '');
+  }
+} as any;
+
+// Mock Headers class
+global.Headers = class MockHeaders {
+  private headersMap = new Map<string, string>();
+
+  constructor(init?: any) {
+    if (init) {
+      if (init instanceof MockHeaders) {
+        init.forEach((value: string, key: string) => {
+          this.headersMap.set(key.toLowerCase(), value);
+        });
+      } else if (typeof init === 'object') {
+        Object.entries(init).forEach(([key, value]) => {
+          this.headersMap.set(key.toLowerCase(), value as string);
+        });
+      }
+    }
+  }
+
+  get(key: string): string | null {
+    return this.headersMap.get(key.toLowerCase()) || null;
+  }
+
+  set(key: string, value: string): void {
+    this.headersMap.set(key.toLowerCase(), value);
+  }
+
+  has(key: string): boolean {
+    return this.headersMap.has(key.toLowerCase());
+  }
+
+  delete(key: string): boolean {
+    return this.headersMap.delete(key.toLowerCase());
+  }
+
+  forEach(callback: (value: string, key: string) => void): void {
+    this.headersMap.forEach(callback);
+  }
+} as any;
+
+// Mock Request class
+global.Request = class MockRequest {
+  public method: string;
+  public url: string;
+  public headers: any;
+
+  constructor(public input: string, public init?: any) {
+    this.url = input;
+    this.method = init?.method || 'GET';
+    this.headers = new (global as any).Headers(init?.headers);
+  }
+  
+  json() {
+    try {
+      return Promise.resolve(JSON.parse(this.init?.body as string || '{}'));
+    } catch {
+      return Promise.resolve({});
+    }
+  }
+  
+  text() {
+    return Promise.resolve(this.init?.body as string || '');
+  }
+} as any;
+
 describe('GameRoom', () => {
   let gameRoom: GameRoom;
   let mockState: any;
@@ -52,9 +236,19 @@ describe('GameRoom', () => {
   });
 
   describe('fetch method', () => {
-    it.skip('WebSocketアップグレードリクエストを処理する', async () => {
-      // WebSocketPairのモック実装が不完全のため一時的にスキップ
-      expect(true).toBe(true);
+    it('WebSocketアップグレードリクエストを処理する', async () => {
+      const request = new (global as any).Request('http://localhost/websocket', {
+        headers: {
+          'Upgrade': 'websocket',
+          'Connection': 'Upgrade',
+          'Sec-WebSocket-Key': 'test-key',
+          'Sec-WebSocket-Version': '13'
+        }
+      });
+
+      const response = await gameRoom.fetch(request);
+      expect(response.status).toBe(101);
+      expect((response as any).webSocket).toBeDefined();
     });
 
     it('非WebSocketリクエストを適切に処理する', async () => {
@@ -357,14 +551,29 @@ describe('GameRoom', () => {
   });
 
   describe('WebSocket Integration', () => {
-    it.skip('WebSocketPairが正しく動作する', () => {
-      // WebSocketPairのモック実装が不完全のため一時的にスキップ
-      expect(true).toBe(true);
+    it('WebSocketPairが正しく動作する', () => {
+      const webSocketPair = new (global as any).WebSocketPair();
+      const [client, server] = Object.values(webSocketPair) as any[];
+
+      expect(client).toBeDefined();
+      expect(server).toBeDefined();
+      expect(typeof (client as any).send).toBe('function');
+      expect(typeof (server as any).accept).toBe('function');
     });
 
-    it.skip('WebSocket接続の模擬テストを実行する', async () => {
-      // WebSocketPairのモック実装が不完全のため一時的にスキップ
-      expect(true).toBe(true);
+    it('WebSocket接続の模擬テストを実行する', async () => {
+      const request = new (global as any).Request('http://localhost/websocket', {
+        headers: {
+          'Upgrade': 'websocket',
+          'Connection': 'Upgrade',
+          'Sec-WebSocket-Key': 'test-key',
+          'Sec-WebSocket-Version': '13'
+        }
+      });
+
+      const response = await gameRoom.fetch(request);
+      expect(response.status).toBe(101);
+      expect((response as any).webSocket).toBeDefined();
     });
   });
 });

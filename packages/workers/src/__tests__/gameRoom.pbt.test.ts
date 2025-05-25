@@ -50,7 +50,7 @@ describe('GameRoom - Property-Based Tests', () => {
   const playerNameArb = fc.string({ minLength: 2, maxLength: 20 })
     .filter(name => /^[a-zA-Z0-9ひらがなカタカナ漢字\s]+$/.test(name));
 
-  const httpMethodArb = fc.constantFrom('GET', 'POST', 'PUT', 'DELETE', 'PATCH');
+  const httpMethodArb = fc.constantFrom('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS');
 
   const urlPathArb = fc.oneof(
     fc.constant('/websocket'),
