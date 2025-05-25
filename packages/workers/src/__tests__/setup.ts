@@ -45,36 +45,67 @@ global.console = {
   error: jest.fn(),
 };
 
+// Mock Headers class
+(global as any).Headers = class MockHeaders {
+  private headersMap = new Map<string, string>();
+
+  constructor(init?: Record<string, string> | Map<string, string> | Headers) {
+    if (init) {
+      if (init instanceof Map) {
+        init.forEach((value, key) => {
+          this.headersMap.set(key.toLowerCase(), value);
+        });
+      } else if (typeof init === 'object') {
+        Object.entries(init).forEach(([key, value]) => {
+          this.headersMap.set(key.toLowerCase(), value);
+        });
+      }
+    }
+  }
+
+  get(key: string): string | null {
+    return this.headersMap.get(key.toLowerCase()) || null;
+  }
+
+  set(key: string, value: string): void {
+    this.headersMap.set(key.toLowerCase(), value);
+  }
+
+  has(key: string): boolean {
+    return this.headersMap.has(key.toLowerCase());
+  }
+
+  delete(key: string): boolean {
+    return this.headersMap.delete(key.toLowerCase());
+  }
+
+  forEach(callback: (value: string, key: string) => void): void {
+    this.headersMap.forEach(callback);
+  }
+
+  entries() {
+    return this.headersMap.entries();
+  }
+
+  keys() {
+    return this.headersMap.keys();
+  }
+
+  values() {
+    return this.headersMap.values();
+  }
+};
+
 // Mock Cloudflare Workers APIs
 (global as any).Response = class MockResponse {
   public status: number;
   public statusText: string;
-  public headers: {
-    get: (key: string) => string | null;
-    set: (key: string, value: string) => void;
-    has: (key: string) => boolean;
-    delete: (key: string) => boolean;
-    forEach: (callback: (value: string, key: string) => void) => void;
-  };
+  public headers: any;
 
   constructor(public body: any, public init?: ResponseInit & { webSocket?: any }) {
     this.status = init?.status || 200;
     this.statusText = init?.statusText || 'OK';
-    const headersMap = new Map<string, string>();
-    
-    if (init?.headers) {
-      Object.entries(init.headers).forEach(([key, value]) => {
-        headersMap.set(key.toLowerCase(), value as string);
-      });
-    }
-    
-    this.headers = {
-      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
-      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
-      has: (key: string) => headersMap.has(key.toLowerCase()),
-      delete: (key: string) => headersMap.delete(key.toLowerCase()),
-      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
-    };
+    this.headers = new (global as any).Headers(init?.headers);
     
     // WebSocket support for Cloudflare Workers
     if (init?.webSocket) {
@@ -108,32 +139,12 @@ global.console = {
 (global as any).Request = class MockRequest {
   public method: string;
   public url: string;
-  public headers: {
-    get: (key: string) => string | null;
-    set: (key: string, value: string) => void;
-    has: (key: string) => boolean;
-    delete: (key: string) => boolean;
-    forEach: (callback: (value: string, key: string) => void) => void;
-  };
+  public headers: any;
 
   constructor(public input: string, public init?: RequestInit) {
     this.url = input;
     this.method = init?.method || 'GET';
-    const headersMap = new Map<string, string>();
-    
-    if (init?.headers) {
-      Object.entries(init.headers).forEach(([key, value]) => {
-        headersMap.set(key.toLowerCase(), value as string);
-      });
-    }
-    
-    this.headers = {
-      get: (key: string) => headersMap.get(key.toLowerCase()) || null,
-      set: (key: string, value: string) => headersMap.set(key.toLowerCase(), value),
-      has: (key: string) => headersMap.has(key.toLowerCase()),
-      delete: (key: string) => headersMap.delete(key.toLowerCase()),
-      forEach: (callback: (value: string, key: string) => void) => headersMap.forEach(callback)
-    };
+    this.headers = new (global as any).Headers(init?.headers);
   }
   
   json() {
@@ -217,5 +228,10 @@ describe('Setup', () => {
     const storage = new (global as any).DurableObjectStorage();
     expect(storage.get).toBeDefined();
     expect(storage.put).toBeDefined();
+  });
+
+  it('should have mocked Headers', () => {
+    const headers = new (global as any).Headers({ 'Content-Type': 'application/json' });
+    expect(headers.get('content-type')).toBe('application/json');
   });
 });
