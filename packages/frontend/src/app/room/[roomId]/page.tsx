@@ -87,10 +87,14 @@ export default function RoomPage() {
     setSelectedAbilityTarget(null)
   }, [gameState?.phase])
   
-  // チャットの自動スクロール
+  // チャットの自動スクロール（投票フェーズでは無効）
   useEffect(() => {
+    // 投票フェーズやゲーム終了時は自動スクロールしない
+    if (gameState?.phase === 'voting' || gameState?.phase === 'ended') {
+      return
+    }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  }, [chatMessages, gameState?.phase])
   
   // AIの応答を生成
   // AI応答処理用のref（重複防止）
@@ -748,7 +752,7 @@ ${recentMessages}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* プレイヤーリスト */}
           <div className="lg:col-span-1">
             <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-4">
@@ -837,7 +841,7 @@ ${recentMessages}
           </div>
 
           {/* ゲームエリア */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-1">
             <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-white">
@@ -1142,89 +1146,92 @@ ${recentMessages}
                 </div>
               )}
 
-              {/* チャットエリア */}
-              <div className="mt-6 bg-white/5 rounded-lg p-4">
-                <h3 className="text-white font-medium mb-3">チャット</h3>
-                <div className="bg-black/30 rounded-lg p-4 h-96 overflow-y-auto mb-3 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                  {chatMessages.length > 0 ? (
-                    <>
-                      {chatMessages.map((msg, index) => (
-                        <div key={index} className="mb-3 animate-fadeIn">
-                          {msg.playerName === 'System' ? (
-                            // Systemメッセージの特別なスタイル
-                            <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-3">
-                              <div className="flex items-start space-x-2">
-                                <div className="flex-shrink-0">
-                                  <Avatar playerName={msg.playerName} size="sm" />
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-baseline space-x-2 mb-1">
-                                    <span className="font-medium text-yellow-300 text-sm">
-                                      System
-                                    </span>
-                                    <span className="text-xs text-yellow-400/70">
-                                      {new Date(msg.timestamp).toLocaleTimeString('ja-JP', {
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </span>
-                                  </div>
-                                  <p className="text-yellow-200 text-sm break-words">
-                                    {msg.content}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            // 通常のプレイヤーメッセージ
-                            <div className="flex items-start space-x-2">
-                              <div className="flex-shrink-0">
-                                <Avatar playerName={msg.playerName} size="sm" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-baseline space-x-2 mb-1">
-                                  <span className="font-medium text-white text-sm">
-                                    {msg.playerName}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {new Date(msg.timestamp).toLocaleTimeString('ja-JP', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
-                                </div>
-                                <p className="text-gray-300 text-sm break-words">
-                                  {msg.content}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </>
-                  ) : (
-                    <p className="text-gray-400 text-sm text-center">チャットメッセージはありません</p>
-                  )}
-                </div>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
-                    placeholder="メッセージを入力..."
-                    className="flex-1 px-4 py-2.5 bg-white/10 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white/15 transition-colors"
-                  />
-                  <button
-                    onClick={sendChatMessage}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors"
-                  >
-                    送信
-                  </button>
-                </div>
-              </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 独立したチャットエリア */}
+      <div className="container mx-auto px-4 mt-6">
+        <div className="bg-white/5 rounded-lg p-4">
+          <h3 className="text-white font-medium mb-3">チャット</h3>
+          <div className="bg-black/30 rounded-lg p-4 h-64 overflow-y-auto mb-3 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+            {chatMessages.length > 0 ? (
+              <>
+                {chatMessages.map((msg, index) => (
+                  <div key={index} className="mb-3 animate-fadeIn">
+                    {msg.playerName === 'System' ? (
+                      // Systemメッセージの特別なスタイル
+                      <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-3">
+                        <div className="flex items-start space-x-2">
+                          <div className="flex-shrink-0">
+                            <Avatar playerName={msg.playerName} size="sm" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-baseline space-x-2 mb-1">
+                              <span className="font-medium text-yellow-300 text-sm">
+                                System
+                              </span>
+                              <span className="text-xs text-yellow-400/70">
+                                {new Date(msg.timestamp).toLocaleTimeString('ja-JP', {
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-yellow-200 text-sm break-words">
+                              {msg.content}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // 通常のプレイヤーメッセージ
+                      <div className="flex items-start space-x-2">
+                        <div className="flex-shrink-0">
+                          <Avatar playerName={msg.playerName} size="sm" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-baseline space-x-2 mb-1">
+                            <span className="font-medium text-white text-sm">
+                              {msg.playerName}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(msg.timestamp).toLocaleTimeString('ja-JP', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-gray-300 text-sm break-words">
+                            {msg.content}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </>
+            ) : (
+              <p className="text-gray-400 text-sm text-center">チャットメッセージはありません</p>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+              placeholder="メッセージを入力..."
+              className="flex-1 px-4 py-2.5 bg-white/10 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white/15 transition-colors"
+            />
+            <button
+              onClick={sendChatMessage}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md font-medium transition-colors"
+            >
+              送信
+            </button>
           </div>
         </div>
       </div>
