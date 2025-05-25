@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { Modal } from '../../../components/ui/modal'
-import { getStoredApiKey, setStoredApiKey, validateApiKey, testApiKey, generateAIPersonality, generateAIResponse, moderateMessage, determineAIResponse, updateEmotionalState } from '../../../lib/openai'
+import { getStoredApiKey, setStoredApiKey, validateApiKey, testApiKey, generateAIPersonality, generateAIResponse, determineAIResponse, updateEmotionalState } from '../../../lib/openai'
 import { Avatar } from '../../../lib/avatars'
 
 // AI名前の定数
@@ -57,8 +57,6 @@ export default function RoomPage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const [showRules, setShowRules] = useState(false)
   const [showHint, setShowHint] = useState(false)
-  const [showInappropriateModal, setShowInappropriateModal] = useState(false)
-  const [inappropriateMessage, setInappropriateMessage] = useState('')
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null)
   const [selectedAbilityTarget, setSelectedAbilityTarget] = useState<string | null>(null)
   const [aiPersonalities, setAiPersonalities] = useState<Map<string, any>>(new Map())
@@ -229,11 +227,6 @@ ${respondingAI.role === 'werewolf' ?
             )
             
             // AIの応答も校閲する
-            try {
-              response = await moderateMessage(apiKey, response)
-            } catch (error) {
-              console.error('AI response moderation error:', error)
-            }
             
             // 感情状態を更新
             if (aiPersonality) {
@@ -336,14 +329,13 @@ ${recentMessages}
         
         try {
           const response = await generateAIResponse(apiKey, proactivePrompt, '', aiPersonalities.get(speakingAI.id))
-          const moderatedResponse = await moderateMessage(apiKey, response)
           
           if (websocket && websocket.readyState === WebSocket.OPEN) {
             const chatMsg = {
               type: 'chat',
               roomId: roomId,
               message: {
-                content: moderatedResponse,
+                content: response,
                 type: 'public' as const,
                 playerName: speakingAI.name
               },
@@ -560,36 +552,6 @@ ${recentMessages}
       let messageContent = chatMessage.trim()
       const originalMessage = messageContent
       
-      // APIキーがある場合は、メッセージを校閲
-      if (apiKey && gameState?.phase !== 'lobby') {
-        try {
-          console.log('Moderating message:', messageContent)
-          const moderatedMessage = await moderateMessage(apiKey, messageContent)
-          console.log('Original:', originalMessage, 'Moderated:', moderatedMessage)
-          
-          // 校閲で大幅に変更された場合（不適切メッセージ）
-          if (moderatedMessage !== originalMessage &&
-              (moderatedMessage.includes('申し訳ありません') ||
-               moderatedMessage.includes('不適切') ||
-               moderatedMessage.includes('ゲームの雰囲気には合いません') ||
-               moderatedMessage.includes('少し短すぎて') ||
-               moderatedMessage.includes('少し不明瞭'))) {
-            // モーダルで警告を表示し、サーバーには送信しない
-            setInappropriateMessage(moderatedMessage)
-            setShowInappropriateModal(true)
-            setChatMessage('')
-            setIsSendingMessage(false)
-            return
-          }
-          
-          messageContent = moderatedMessage
-        } catch (error) {
-          console.error('Message moderation error:', error)
-          // エラーの場合は元のメッセージを使用
-        }
-      } else {
-        console.log('Skipping moderation - API key:', !!apiKey, 'Phase:', gameState?.phase)
-      }
       
       const chatMsg = {
         type: 'chat',
@@ -1313,33 +1275,6 @@ ${recentMessages}
         </div>
       </Modal>
 
-      {/* 不適切発言警告モーダル */}
-      <Modal
-        isOpen={showInappropriateModal}
-        onClose={() => setShowInappropriateModal(false)}
-        title="不適切な発言"
-      >
-        <div className="space-y-4">
-          <div className="bg-red-900/30 border border-red-600/50 rounded-lg p-4">
-            <p className="text-red-300 text-sm mb-3">
-              あなたの発言は人狼ゲームの雰囲気に適さないため、送信されませんでした。
-            </p>
-            <div className="bg-red-800/30 rounded p-3">
-              <p className="text-red-200 text-sm font-medium">システムからのメッセージ:</p>
-              <p className="text-red-100 text-sm mt-1">{inappropriateMessage}</p>
-            </div>
-          </div>
-          <p className="text-gray-300 text-sm">
-            ゲームの世界観に合った表現で再度お試しください。
-          </p>
-          <button
-            onClick={() => setShowInappropriateModal(false)}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
-          >
-            理解しました
-          </button>
-        </div>
-      </Modal>
 
       {/* ルール説明モーダル */}
       <Modal

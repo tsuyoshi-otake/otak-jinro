@@ -25,7 +25,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "[Console]::Output
 
 # Start Workers
 Write-Host "Starting Workers..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 > `$null; cd '$scriptDir\packages\workers'; npm install; npx wrangler dev 2>&1 | Tee-Object -FilePath '$scriptDir\logs\workers.log'"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 > `$null; cd '$scriptDir\packages\workers'; npm install; npx wrangler dev --ip 0.0.0.0 2>&1 | Tee-Object -FilePath '$scriptDir\logs\workers.log'"
 
 # Display log monitoring commands
 Write-Host "`n=== Log Monitoring Commands ===" -ForegroundColor Green

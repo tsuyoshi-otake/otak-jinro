@@ -313,46 +313,6 @@ function generateFallbackPersonality(playerName: string): any {
   };
 }
 
-// メッセージを人狼ゲームの世界観に合わせて校閲
-export async function moderateMessage(apiKey: string, message: string): Promise<string> {
-  try {
-    const openai = new OpenAI({
-      apiKey: apiKey,
-      dangerouslyAllowBrowser: true
-    });
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: 'system',
-          content: `You are a message moderator for a Werewolf (Mafia) game.
-          Your task is to rewrite messages to fit the game's atmosphere while preserving the original intent.
-          - Remove modern slang, internet memes, or out-of-character references
-          - Keep the message natural and conversational
-          - Preserve the emotional tone and intent
-          - If the message is already appropriate, return it unchanged
-          - Keep the message concise
-          - Respond in the same language as the input`
-        },
-        {
-          role: 'user',
-          content: message
-        }
-      ],
-      temperature: 0.2,
-      max_completion_tokens: 120,
-      top_p: 0.8,
-      frequency_penalty: 0,
-      presence_penalty: 0
-    });
-
-    return response.choices[0]?.message?.content || message;
-  } catch (error) {
-    console.error('Message moderation failed:', error)
-    return message; // 失敗した場合は元のメッセージを返す
-  }
-}
 
 // AI応答判定関数 - 文脈に基づいてAIが応答すべきかを判定
 export async function determineAIResponse(

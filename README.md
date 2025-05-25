@@ -156,9 +156,18 @@ otak-jinro/
    ```
 
 4. **開発環境起動**
+   
+   **ローカルマシンのみでテスト**
    ```powershell
    powershell -ExecutionPolicy Bypass -File start-dev.ps1
    ```
+   
+   **ローカルエリアネットワーク（LAN）でテスト**
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File start-dev-lan.ps1
+   ```
+   
+   > 💡 **LANテストについて**: `start-dev-lan.ps1` を使用すると、同じネットワーク内の他のデバイス（スマートフォン、タブレット等）からもゲームにアクセスできます。スクリプトが表示するIPアドレス（例: `http://192.168.1.100:3000`）を使用してください。
 
 ### デプロイメント
 
