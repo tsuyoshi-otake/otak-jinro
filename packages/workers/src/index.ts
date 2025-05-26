@@ -8,11 +8,22 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     
-    // CORS設定
+    // CORS設定 - GitHub Pages対応
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://localhost:3000',
+      'https://tsuyoshi-otake.github.io',
+      env.CORS_ORIGIN
+    ].filter(Boolean);
+    
+    const origin = request.headers.get('Origin');
+    const corsOrigin = allowedOrigins.includes(origin || '') ? (origin || '*') : '*';
+    
     const corsHeaders = {
-      'Access-Control-Allow-Origin': env.CORS_ORIGIN || '*',
+      'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
     };
 
     // プリフライトリクエスト
