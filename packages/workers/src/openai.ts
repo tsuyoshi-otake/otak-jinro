@@ -242,9 +242,9 @@ export class OpenAIService {
       return null;
     }
 
-    // 発言頻度の制御 - 最低20秒間隔
+    // 発言頻度の制御 - 最低10秒間隔
     const timeSinceLastMessage = Date.now() - (player.lastMessageTime || 0);
-    const minInterval = 20000; // 20秒
+    const minInterval = 10000; // 10秒
 
     if (timeSinceLastMessage < minInterval) {
       return null;
@@ -343,12 +343,71 @@ export class OpenAIService {
    * ゲームプロンプトを構築
    */
   private buildGamePrompt(playerName: string, gameState: any, personality: AIPersonality): string {
+    const currentPlayer = gameState.players.find((p: any) => p.name === playerName);
+    const playerRole = currentPlayer?.role || 'unknown';
+    
+    // 全会話履歴を取得
+    const allMessages = (gameState.chatMessages || [])
+      .map((msg: any) => `[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '時刻不明'}] ${msg.playerName}: ${msg.content}`)
+      .join('\n');
+
+    // 投票履歴の詳細情報
+    const voteHistory = (gameState.voteHistory || [])
+      .map((round: any, index: number) => {
+        const votes = round.votes.map((vote: any) => {
+          const voter = gameState.players.find((p: any) => p.id === vote.voterId)?.name || '不明';
+          const target = gameState.players.find((p: any) => p.id === vote.targetId)?.name || '不明';
+          return `  ${voter} → ${target}`;
+        }).join('\n');
+        const executed = round.executedPlayer || '処刑なし';
+        return `${index + 1}日目投票:\n${votes}\n処刑: ${executed}`;
+      })
+      .join('\n\n');
+
+    // 現在の投票状況
+    const currentVotes = (gameState.votes || [])
+      .map((vote: any) => {
+        const voter = gameState.players.find((p: any) => p.id === vote.voterId)?.name || '不明';
+        const target = gameState.players.find((p: any) => p.id === vote.targetId)?.name || '不明';
+        return `${voter} → ${target}`;
+      })
+      .join('\n');
+
+    // 夜の能力結果（AIの知識として）
+    const nightResults = this.buildNightResults(currentPlayer, gameState);
+
+    // 死亡情報
+    const deathInfo = gameState.players
+      .filter((p: any) => !p.isAlive)
+      .map((p: any) => `${p.name} (${p.deathReason || '処刑'}・${p.deathDay || '?'}日目)`)
+      .join(', ');
+
+    // AI独自のバイアスと戦略
+    const strategicBias = this.generateStrategicBias(playerRole, personality, gameState);
+
     return `
+【あなたの秘密情報】
+- 役職: ${playerRole}
+- あなただけが知っている情報: ${nightResults}
+
+【戦略的バイアス】
+${strategicBias}
+
 【ゲーム状況】
 - プレイヤー名: ${playerName}
 - フェーズ: ${gameState.phase}
 - 日数: ${gameState.currentDay}
 - 生存者: ${gameState.players.filter((p: any) => p.isAlive).map((p: any) => p.name).join(', ')}
+- 死亡者: ${deathInfo || 'なし'}
+
+【全会話履歴】
+${allMessages || '（まだ発言がありません）'}
+
+【投票履歴】
+${voteHistory || '（まだ投票履歴がありません）'}
+
+【現在の投票状況】
+${currentVotes || '（まだ投票がありません）'}
 
 【あなたの個性】
 - 性別: ${personality.gender}
@@ -367,10 +426,98 @@ export class OpenAIService {
 - リーダー追従: ${personality.biases.followsLeader ? 'あり' : 'なし'}
 - 独立性: ${personality.biases.independent ? '高い' : '低い'}
 
-【指示】
-あなたの個性に基づいて、現在の状況に適した発言を50文字以内で生成してください。
-自然で戦略的な発言を心がけ、ゲームの進行に貢献してください。
+【戦略的指示】
+役職に応じた高度な戦略を取ってください：
+- 村人: 必要に応じて占い師や霊媒師を騙り、情報を撹乱してもよい
+- 人狼: 村人を装い、疑いを他に向ける。仲間をかばいすぎないよう注意
+- 占い師: 真の結果を伝えるか、戦略的に嘘をつくかを判断
+- 霊媒師: 処刑された人の正体を正確に、または戦略的に偽って報告
+- ハンター: 正体を隠しつつ、人狼を見つけることに集中
+
+上記の全情報を踏まえ、戦略的で自然な発言を50文字以内で生成してください。
+会話の流れを読み、他プレイヤーの発言に具体的に反応してください。
 `;
+  }
+
+  /**
+   * 夜の能力結果を構築
+   */
+  private buildNightResults(player: any, gameState: any): string {
+    if (!player) return '特別な情報はありません';
+
+    const results = [];
+    
+    // 占い師の結果
+    if (player.role === 'seer' && player.seerResults) {
+      player.seerResults.forEach((result: any) => {
+        results.push(`${result.day}日目: ${result.target}を占った結果 → ${result.result}`);
+      });
+    }
+
+    // 霊媒師の結果
+    if (player.role === 'medium' && player.mediumResults) {
+      player.mediumResults.forEach((result: any) => {
+        results.push(`${result.day}日目: ${result.target}の霊視結果 → ${result.result}`);
+      });
+    }
+
+    // 人狼の仲間情報
+    if (player.role === 'werewolf') {
+      const werewolves = gameState.players
+        .filter((p: any) => p.role === 'werewolf' && p.name !== player.name)
+        .map((p: any) => p.name);
+      if (werewolves.length > 0) {
+        results.push(`人狼の仲間: ${werewolves.join(', ')}`);
+      }
+    }
+
+    return results.length > 0 ? results.join('\n') : '特別な情報はありません';
+  }
+
+  /**
+   * 戦略的バイアスを生成
+   */
+  private generateStrategicBias(role: string, personality: AIPersonality, gameState: any): string {
+    const biases = [];
+
+    // 役職別のバイアス
+    switch (role) {
+      case 'werewolf':
+        biases.push('- 村人チームの信頼を得ることを最優先とする');
+        biases.push('- 真の占い師や霊媒師を特定し、無力化を図る');
+        biases.push('- 仲間の人狼を露骨にかばわない');
+        break;
+      case 'seer':
+        biases.push('- 人狼を見つけたら積極的に告発するか、慎重に立ち回るかを判断');
+        biases.push('- 偽占い師に対抗する際は論理的な証拠を示す');
+        biases.push('- 必要に応じて結果を隠すことも検討');
+        break;
+      case 'medium':
+        biases.push('- 処刑された人の正体情報を戦略的に活用');
+        biases.push('- 偽霊媒師の発言と照らし合わせて矛盾を指摘');
+        break;
+      case 'hunter':
+        biases.push('- 正体を隠しつつ人狼を探す');
+        biases.push('- 処刑されそうになったら能力を明かすことを検討');
+        break;
+      case 'villager':
+        biases.push('- 時として占い師や霊媒師を騙ることで場を混乱させる戦術も有効');
+        biases.push('- 真の能力者を守るために注意を引く役割を果たす');
+        break;
+    }
+
+    // 個性別のバイアス
+    if (personality.biases.quickToAccuse) {
+      biases.push('- 怪しいと感じたら積極的に疑いを表明する');
+    }
+    if (personality.biases.trustsEasily) {
+      biases.push('- 他プレイヤーの言葉を信じやすく、騙されやすい傾向');
+    }
+    if (personality.biases.independent) {
+      biases.push('- 多数意見に流されず、独自の判断を重視する');
+    }
+
+    return biases.join('\n');
   }
 
   /**

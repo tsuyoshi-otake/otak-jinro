@@ -80,7 +80,24 @@ export default function RoomPage() {
   const [mediumResult, setMediumResult] = useState<string | null>(null)
   const [gameEndResult, setGameEndResult] = useState<any>(null)
   const [showRulesModal, setShowRulesModal] = useState(false)
-  
+  const [resultModal, setResultModal] = useState<{
+    type: 'vote' | 'ability' | 'execution' | 'death',
+    title: string,
+    content: string,
+    show: boolean
+  }>({ type: 'vote', title: '', content: '', show: false })
+  const [lastSystemMessageId, setLastSystemMessageId] = useState<string | null>(null)
+
+  // 結果モーダルを表示する関数
+  const showResultModal = (type: 'vote' | 'ability' | 'execution' | 'death', title: string, content: string) => {
+    setResultModal({ type, title, content, show: true })
+    
+    // 3秒後に自動で閉じる
+    setTimeout(() => {
+      setResultModal(prev => ({ ...prev, show: false }))
+    }, 3000)
+  }
+
   const ws = useRef<WebSocket | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
@@ -142,15 +159,47 @@ export default function RoomPage() {
             switch (message.type) {
               case 'game_state_update':
                 setGameState(message.gameState)
+                
+                // チャットメッセージから結果を検出してモーダル表示（重複防止）
+                if (message.gameState.chatMessages) {
+                  const latestMessage = message.gameState.chatMessages[message.gameState.chatMessages.length - 1]
+                  if (latestMessage && latestMessage.playerName === 'System' && latestMessage.id !== lastSystemMessageId) {
+                    setLastSystemMessageId(latestMessage.id)
+                    
+                    if (latestMessage.content.includes('が処刑されました')) {
+                      showResultModal('execution', '処刑結果', latestMessage.content)
+                    } else if (latestMessage.content.includes('投票が同数')) {
+                      showResultModal('vote', '投票結果', latestMessage.content)
+                    } else if (latestMessage.content.includes('が襲撃されました') || latestMessage.content.includes('が死亡しました')) {
+                      showResultModal('death', '夜の結果', latestMessage.content)
+                    }
+                  }
+                }
                 break
               case 'chat':
-                setChatMessages(prev => [...prev, message.message])
+                // AIメッセージの場合は gameState の更新を待つ
+                if (!message.isAI) {
+                  setChatMessages(prev => [...prev, message.message])
+                }
                 break
               case 'divine_result':
                 setDivineResult(message.message)
+                showResultModal('ability', '占い結果', message.message)
                 break
               case 'medium_result':
                 setMediumResult(message.message)
+                showResultModal('ability', '霊視結果', message.message)
+                break
+              case 'vote_result':
+                showResultModal('vote', '投票結果', message.message || '投票が完了しました')
+                break
+              case 'execution_result':
+                showResultModal('execution', '処刑結果', message.message || '処刑が実行されました')
+                break
+              case 'phase_change':
+                if (message.phase === 'night' && message.deathMessage) {
+                  showResultModal('death', '夜の結果', message.deathMessage)
+                }
                 break
               case 'game_ended':
                 setGameEndResult(message.result)
@@ -467,7 +516,7 @@ export default function RoomPage() {
                 </span>
                 <button
                   onClick={() => setShowRulesModal(true)}
-                  className="px-3 py-2 text-xs bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
+                  className="px-3 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
                 >
                   ゲームルール
                 </button>
@@ -489,7 +538,7 @@ export default function RoomPage() {
               </span>
               <button
                 onClick={() => setShowRulesModal(true)}
-                className="px-3 py-2 text-xs bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
+                className="px-3 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
               >
                 ゲームルール
               </button>
@@ -542,7 +591,7 @@ export default function RoomPage() {
             <h3 className="text-lg font-semibold mb-4">チャット</h3>
             <div
               ref={chatContainerRef}
-              className="h-[617px] overflow-y-auto mb-4 space-y-2 bg-black/40 backdrop-blur-md border border-white/20 p-3 rounded"
+              className="h-[617px] overflow-y-auto mb-4 space-y-2 bg-black/40 backdrop-blur-md border border-white/20 p-3 rounded scrollbar-thin scrollbar-thumb-white/20"
             >
               {(gameState?.chatMessages || []).map((msg, index) => {
                 const timestamp = new Date(msg.timestamp);
@@ -583,25 +632,24 @@ export default function RoomPage() {
               })}
             </div>
             
-            {gameState.phase !== 'lobby' && gameState.phase !== 'ended' && currentPlayer?.isAlive && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleChat()}
-                  placeholder="メッセージを入力..."
-                  className="flex-1 bg-black/50 backdrop-blur-md border border-white/30 rounded px-3 py-2 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50"
-                />
-                <button
-                  onClick={handleChat}
-                  disabled={!chatMessage.trim()}
-                  className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded transition-colors"
-                >
-                  送信
-                </button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleChat()}
+                placeholder={gameState.phase === 'lobby' ? "挨拶やルール確認をしましょう..." : "メッセージを入力..."}
+                disabled={gameState.phase === 'ended' || !currentPlayer?.isAlive}
+                className="flex-1 bg-black/50 backdrop-blur-md border border-white/30 rounded px-3 py-2 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={handleChat}
+                disabled={!chatMessage.trim() || gameState.phase === 'ended' || !currentPlayer?.isAlive}
+                className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded transition-colors"
+              >
+                送信
+              </button>
+            </div>
           </div>
 
           {/* アクション */}
@@ -733,9 +781,9 @@ export default function RoomPage() {
         {/* ゲームルール説明モーダル */}
         {showRulesModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="bg-black/80 backdrop-blur-md border border-white/30 rounded-lg p-6 max-w-lg w-full">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-white">人狼ゲームルール</h2>
+                <h2 className="text-xl font-bold text-white">人狼ゲームルール</h2>
                 <button
                   onClick={() => setShowRulesModal(false)}
                   className="text-gray-400 hover:text-white text-xl"
@@ -744,82 +792,91 @@ export default function RoomPage() {
                 </button>
               </div>
               
-              <div className="space-y-4 text-sm text-gray-200">
+              <div className="space-y-3 text-sm text-gray-200">
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">ゲーム概要</h3>
-                  <p>人狼ゲームは、村人チームと人狼チームに分かれて戦う推理ゲームです。村人は人狼を全員処刑すれば勝利、人狼は村人と同数以上になれば勝利です。</p>
+                  <h3 className="text-base font-semibold text-white mb-2">ゲーム概要</h3>
+                  <p className="text-xs">村人チームと人狼チームの推理ゲーム。村人は人狼を全員処刑すれば勝利、人狼は村人と同数以上になれば勝利。</p>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">役職説明</h3>
-                  <div className="space-y-2">
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-blue-400">村人</h4>
-                      <p>特別な能力はありませんが、議論と投票で人狼を見つけ出します。</p>
+                  <h3 className="text-base font-semibold text-white mb-2">主な役職</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-white/10 p-2 rounded">
+                      <div className="font-medium text-white">村人</div>
+                      <div className="text-gray-300">議論と投票で人狼を探す</div>
                     </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-red-400">人狼</h4>
-                      <p>夜に村人を1人襲撃できます。正体がバレないよう村人のふりをします。</p>
+                    <div className="bg-white/10 p-2 rounded">
+                      <div className="font-medium text-white">人狼</div>
+                      <div className="text-gray-300">夜に村人を襲撃</div>
                     </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-purple-400">占い師</h4>
-                      <p>夜に1人を占い、その人が人狼かどうかを知ることができます。</p>
+                    <div className="bg-white/10 p-2 rounded">
+                      <div className="font-medium text-white">占い師</div>
+                      <div className="text-gray-300">夜に1人の正体を確認</div>
                     </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-green-400">霊媒師</h4>
-                      <p>前日に処刑された人が人狼だったかどうかを知ることができます。</p>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-yellow-400">ハンター</h4>
-                      <p>処刑または襲撃された時に、道連れで1人を指定して倒すことができます。</p>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-orange-400">狂人</h4>
-                      <p>人狼チームですが、人狼が誰かは知りません。人狼の勝利が自分の勝利です。</p>
+                    <div className="bg-white/10 p-2 rounded">
+                      <div className="font-medium text-white">霊媒師</div>
+                      <div className="text-gray-300">処刑者の正体を確認</div>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">ゲームの流れ</h3>
-                  <div className="space-y-2">
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-yellow-300">1. 昼の議論</h4>
-                      <p>全員で話し合い、怪しい人を見つけます。チャットで自由に発言できます。</p>
+                  <h3 className="text-base font-semibold text-white mb-2">ゲームの流れ</h3>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex items-center space-x-2">
+                      <span className="bg-white/20 px-2 py-1 rounded text-white font-medium">1</span>
+                      <span className="text-gray-300">昼の議論 → チャットで話し合い</span>
                     </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-orange-300">2. 投票</h4>
-                      <p>処刑したい人に投票します。最多票の人が処刑されます。</p>
+                    <div className="flex items-center space-x-2">
+                      <span className="bg-white/20 px-2 py-1 rounded text-white font-medium">2</span>
+                      <span className="text-gray-300">投票 → 怪しい人を選択</span>
                     </div>
-                    <div className="bg-white/5 p-3 rounded">
-                      <h4 className="font-medium text-blue-300">3. 夜時間</h4>
-                      <p>人狼は襲撃対象を、占い師は占い対象を選択します。</p>
+                    <div className="flex items-center space-x-2">
+                      <span className="bg-white/20 px-2 py-1 rounded text-white font-medium">3</span>
+                      <span className="text-gray-300">夜時間 → 各役職が行動</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">勝利条件</h3>
-                  <div className="space-y-2">
-                    <div className="bg-blue-500/20 p-3 rounded border border-blue-400/30">
-                      <h4 className="font-medium text-blue-300">村人チーム勝利</h4>
-                      <p>人狼を全員処刑する</p>
+                  <h3 className="text-base font-semibold text-white mb-2">勝利条件</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-white/10 p-2 rounded border border-white/20">
+                      <div className="font-medium text-white">村人チーム</div>
+                      <div className="text-gray-300">人狼を全員処刑</div>
                     </div>
-                    <div className="bg-red-500/20 p-3 rounded border border-red-400/30">
-                      <h4 className="font-medium text-red-300">人狼チーム勝利</h4>
-                      <p>人狼の数が村人と同数以上になる</p>
+                    <div className="bg-white/10 p-2 rounded border border-white/20">
+                      <div className="font-medium text-white">人狼チーム</div>
+                      <div className="text-gray-300">村人と同数以上</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 text-center">
+              <div className="mt-4 text-center">
                 <button
                   onClick={() => setShowRulesModal(false)}
-                  className="bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-6 py-2 rounded transition-colors"
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-4 py-2 rounded transition-colors text-sm"
                 >
                   閉じる
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 結果表示モーダル */}
+        {resultModal.show && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <div className="bg-black/90 backdrop-blur-md border-2 border-white/40 rounded-lg p-6 max-w-md w-full shadow-2xl animate-pulse">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-white mb-4">{resultModal.title}</h2>
+                <div className="bg-white/10 p-4 rounded-lg mb-4">
+                  <p className="text-lg text-white whitespace-pre-line">{resultModal.content}</p>
+                </div>
+                <div className="text-sm text-gray-300">
+                  このメッセージは自動的に閉じます...
+                </div>
               </div>
             </div>
           </div>

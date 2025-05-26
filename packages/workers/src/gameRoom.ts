@@ -17,7 +17,7 @@ import { DurableObject, DurableObjectState, Env, CloudflareWebSocket } from './t
 import { createOpenAIService, OpenAIService } from './openai';
 
 // AI名前の定数
-const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
+const AI_NAMES = ['アリス', 'ボブ', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
 
 // AIプレイヤーかどうかを判定する関数
 const isAIPlayer = (playerName: string) => AI_NAMES.includes(playerName);
@@ -347,6 +347,9 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    // ゲーム開始前の挨拶チャットをクリア
+    this.gameState.chatMessages = [];
+    
     // 役職配布
     const customRoles = this.gameState.gameSettings.customRoles.length > 0
       ? this.gameState.gameSettings.customRoles
@@ -356,6 +359,16 @@ export class GameRoom implements DurableObject {
     this.gameState.currentDay = 1;
     this.gameState.timeRemaining = this.gameState.gameSettings.dayDuration;
     this.gameState.updatedAt = Date.now();
+
+    // ゲーム開始のシステムメッセージを追加
+    this.gameState.chatMessages.push({
+      id: `system_${Date.now()}`,
+      playerId: 'system',
+      playerName: 'システム',
+      content: `ゲームを開始しました！ 昼フェーズです。議論を始めてください。`,
+      type: 'system',
+      timestamp: Date.now()
+    });
 
     await this.saveGameState();
     this.broadcastGameState();
@@ -438,8 +451,10 @@ export class GameRoom implements DurableObject {
     await this.saveGameState();
     this.broadcastGameState();
     
-    // AIプレイヤーが文脈に応じて反応
-    this.triggerAIResponse(chatMessage);
+    // AIプレイヤーが文脈に応じて反応（ゲーム中のみ）
+    if (this.gameState.phase !== 'lobby') {
+      this.triggerAIResponse(chatMessage);
+    }
   }
 
   private async handleUseAbility(playerId: string, message: any) {
@@ -734,6 +749,7 @@ export class GameRoom implements DurableObject {
           type: 'system' as const
         };
         this.gameState.chatMessages.push(executionMessage);
+        
       }
     } else {
       // 処刑者がいない場合はクリア
@@ -1674,9 +1690,9 @@ export class GameRoom implements DurableObject {
    * 個別AIプレイヤーの発言スケジュール
    */
   private scheduleIndividualAIMessage(aiPlayer: Player, index: number) {
-    // 20-40秒のランダム間隔 + 初期遅延でずらす
-    const getRandomInterval = () => Math.floor(Math.random() * 20000) + 20000; // 20-40秒
-    const initialDelay = index * 5000; // 各AIプレイヤーを5秒ずつずらす
+    // 10-25秒のランダム間隔 + 初期遅延でずらす
+    const getRandomInterval = () => Math.floor(Math.random() * 15000) + 10000; // 10-25秒
+    const initialDelay = index * 3000; // 各AIプレイヤーを3秒ずつずらす
 
     const scheduleNext = () => {
       const interval = getRandomInterval();
@@ -1776,6 +1792,9 @@ export class GameRoom implements DurableObject {
               isAI: true,
               aiPlayerId: currentPlayer.id
             });
+
+            // ゲーム状態も更新して送信（AIメッセージがチャットに反映されるように）
+            this.broadcastGameState();
 
             const timeStr = now.toLocaleTimeString('ja-JP', {
               hour12: false,

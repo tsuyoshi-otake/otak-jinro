@@ -185,23 +185,6 @@ export default function HomePage() {
             </button>
           </div>
         </div>
-
-        {/* ゲーム説明 */}
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg shadow-lg p-4">
-          <h3 className="text-lg font-semibold text-white mb-3 text-center">ゲームについて</h3>
-          <div className="space-y-2 text-sm text-gray-300">
-            <p>
-              <strong>人狼ゲーム</strong>は、村人チームと人狼チームに分かれて戦う推理ゲームです。
-            </p>
-            <div className="space-y-1">
-              <p><strong>村人チーム:</strong> 人狼を全員処刑すれば勝利</p>
-              <p><strong>人狼チーム:</strong> 村人と同数以下になれば勝利</p>
-            </div>
-            <p className="text-xs text-gray-400">
-              最低4人から最大20人まで参加可能です
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   )

@@ -1,123 +1,96 @@
 import React from 'react'
 
-// アバターのパターン
+// 幾何学的アバターパターン（モノクロ）
 const avatarPatterns = [
-  // パターン1: シンプルな顔
-  (color: string) => (
+  // パターン1: 六角形ベース
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <circle cx="35" cy="40" r="5" fill="#333" />
-      <circle cx="65" cy="40" r="5" fill="#333" />
-      <path d="M 35 65 Q 50 75 65 65" stroke="#333" strokeWidth="3" fill="none" />
+      <polygon points="50,5 85,25 85,75 50,95 15,75 15,25" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <polygon points="50,20 70,30 70,70 50,80 30,70 30,30" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <circle cx="50" cy="45" r="8" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン2: 眼鏡をかけた顔
-  (color: string) => (
+  // パターン2: 三角形モジュール
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <circle cx="35" cy="40" r="12" fill="none" stroke="#333" strokeWidth="2" />
-      <circle cx="65" cy="40" r="12" fill="none" stroke="#333" strokeWidth="2" />
-      <line x1="47" y1="40" x2="53" y2="40" stroke="#333" strokeWidth="2" />
-      <circle cx="35" cy="40" r="3" fill="#333" />
-      <circle cx="65" cy="40" r="3" fill="#333" />
-      <path d="M 35 65 Q 50 70 65 65" stroke="#333" strokeWidth="3" fill="none" />
+      <polygon points="50,10 85,85 15,85" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <polygon points="50,25 70,70 30,70" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <polygon points="50,35 60,55 40,55" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン3: 笑顔
-  (color: string) => (
+  // パターン3: 菱形パターン
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <path d="M 30 35 Q 35 30 40 35" stroke="#333" strokeWidth="3" fill="none" />
-      <path d="M 60 35 Q 65 30 70 35" stroke="#333" strokeWidth="3" fill="none" />
-      <path d="M 30 60 Q 50 80 70 60" stroke="#333" strokeWidth="3" fill="none" />
+      <polygon points="50,10 85,50 50,90 15,50" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <polygon points="50,25 70,50 50,75 30,50" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <polygon points="50,35 60,50 50,65 40,50" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン4: クールな顔
-  (color: string) => (
+  // パターン4: 円形分割
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <rect x="25" y="38" width="20" height="4" fill="#333" />
-      <rect x="55" y="38" width="20" height="4" fill="#333" />
-      <line x1="35" y1="65" x2="65" y2="65" stroke="#333" strokeWidth="3" />
+      <circle cx="50" cy="50" r="40" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <path d="M 50,10 A 40,40 0 0,1 90,50 L 50,50 Z" fill={`rgba(255,255,255,${0.15 + intensity * 0.25})`}/>
+      <path d="M 50,50 A 40,40 0 0,1 10,50 L 50,50 Z" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <circle cx="50" cy="50" r="15" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン5: 驚いた顔
-  (color: string) => (
+  // パターン5: 正方形回転
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <circle cx="35" cy="40" r="8" fill="#fff" stroke="#333" strokeWidth="2" />
-      <circle cx="65" cy="40" r="8" fill="#fff" stroke="#333" strokeWidth="2" />
-      <circle cx="35" cy="40" r="4" fill="#333" />
-      <circle cx="65" cy="40" r="4" fill="#333" />
-      <ellipse cx="50" cy="65" rx="15" ry="10" fill="#333" />
+      <rect x="15" y="15" width="70" height="70" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2" transform="rotate(15 50 50)"/>
+      <rect x="25" y="25" width="50" height="50" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`} transform="rotate(30 50 50)"/>
+      <rect x="35" y="35" width="30" height="30" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`} transform="rotate(45 50 50)"/>
     </svg>
   ),
   
-  // パターン6: ウインクする顔
-  (color: string) => (
+  // パターン6: 星形
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <path d="M 25 40 Q 35 35 45 40" stroke="#333" strokeWidth="3" fill="none" />
-      <circle cx="65" cy="40" r="5" fill="#333" />
-      <path d="M 35 65 Q 50 75 65 65" stroke="#333" strokeWidth="3" fill="none" />
+      <polygon points="50,5 60,35 90,35 68,55 78,85 50,65 22,85 32,55 10,35 40,35" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <polygon points="50,20 55,40 75,40 59,52 64,72 50,60 36,72 41,52 25,40 45,40" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <circle cx="50" cy="50" r="12" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン7: 髭のある顔
-  (color: string) => (
+  // パターン7: 八角形
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <circle cx="35" cy="40" r="5" fill="#333" />
-      <circle cx="65" cy="40" r="5" fill="#333" />
-      <path d="M 35 65 Q 50 70 65 65" stroke="#333" strokeWidth="3" fill="none" />
-      <path d="M 30 55 Q 50 60 70 55" stroke="#333" strokeWidth="2" fill="none" />
+      <polygon points="30,15 70,15 85,30 85,70 70,85 30,85 15,70 15,30" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <polygon points="35,25 65,25 75,35 75,65 65,75 35,75 25,65 25,35" fill={`rgba(255,255,255,${0.05 + intensity * 0.15})`}/>
+      <polygon points="40,35 60,35 65,40 65,60 60,65 40,65 35,60 35,40" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   ),
   
-  // パターン8: 帽子をかぶった顔
-  (color: string) => (
+  // パターン8: 螺旋
+  (intensity: number) => (
     <svg viewBox="0 0 100 100" className="w-full h-full">
-      <circle cx="50" cy="50" r="45" fill={color} />
-      <rect x="20" y="15" width="60" height="25" fill="#444" rx="5" />
-      <rect x="15" y="35" width="70" height="5" fill="#333" />
-      <circle cx="35" cy="50" r="4" fill="#333" />
-      <circle cx="65" cy="50" r="4" fill="#333" />
-      <path d="M 35 70 Q 50 75 65 70" stroke="#333" strokeWidth="3" fill="none" />
+      <circle cx="50" cy="50" r="40" fill={`rgba(255,255,255,${0.1 + intensity * 0.3})`} stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+      <path d="M 50,10 A 30,30 0 1,1 80,50 A 20,20 0 1,1 50,70 A 10,10 0 1,1 60,50" fill="none" stroke={`rgba(255,255,255,${0.5 + intensity * 0.3})`} strokeWidth="3"/>
+      <circle cx="50" cy="50" r="8" fill={`rgba(255,255,255,${0.3 + intensity * 0.4})`}/>
     </svg>
   )
 ]
 
-// 色のパレット
-const colorPalette = [
-  '#FFB6C1', // ライトピンク
-  '#87CEEB', // スカイブルー
-  '#98FB98', // ペールグリーン
-  '#DDA0DD', // プラム
-  '#F0E68C', // カーキ
-  '#FFE4B5', // モカシン
-  '#B0E0E6', // パウダーブルー
-  '#F5DEB3', // ウィート
-  '#D8BFD8', // シスル
-  '#FFDAB9', // ピーチパフ
+// モノクロ強度パレット（0.0-1.0）
+const intensityPalette = [
+  0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
 ]
 
-// システム専用アバター
+// システム専用アバター（モノクロ幾何学）
 const systemAvatar = () => (
   <svg viewBox="0 0 100 100" className="w-full h-full">
-    <circle cx="50" cy="50" r="45" fill="#6B7280" />
-    <rect x="30" y="25" width="40" height="30" fill="#374151" rx="5" />
-    <rect x="35" y="30" width="30" height="20" fill="#9CA3AF" rx="2" />
-    <circle cx="40" cy="40" r="2" fill="#10B981" />
-    <circle cx="50" cy="40" r="2" fill="#F59E0B" />
-    <circle cx="60" cy="40" r="2" fill="#EF4444" />
-    <rect x="35" y="45" width="30" height="2" fill="#6B7280" />
-    <rect x="35" y="48" width="20" height="2" fill="#6B7280" />
-    <rect x="25" y="65" width="50" height="8" fill="#374151" rx="4" />
-    <rect x="30" y="67" width="40" height="4" fill="#9CA3AF" rx="2" />
+    <polygon points="50,10 80,25 80,75 50,90 20,75 20,25" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" strokeWidth="2"/>
+    <rect x="35" y="30" width="30" height="20" fill="rgba(255,255,255,0.1)" rx="3"/>
+    <circle cx="42" cy="40" r="3" fill="rgba(255,255,255,0.4)"/>
+    <circle cx="58" cy="40" r="3" fill="rgba(255,255,255,0.4)"/>
+    <rect x="40" y="55" width="20" height="3" fill="rgba(255,255,255,0.3)" rx="1"/>
+    <rect x="35" y="65" width="30" height="8" fill="rgba(255,255,255,0.2)" rx="4"/>
+    <polygon points="50,70 45,75 55,75" fill="rgba(255,255,255,0.3)"/>
   </svg>
 )
 
@@ -135,14 +108,14 @@ export function generateAvatar(playerName: string): React.ReactNode {
     hash = hash & hash // Convert to 32bit integer
   }
   
-  // ハッシュ値を使ってパターンと色を選択
+  // ハッシュ値を使ってパターンと強度を選択
   const patternIndex = Math.abs(hash) % avatarPatterns.length
-  const colorIndex = Math.abs(hash >> 8) % colorPalette.length
+  const intensityIndex = Math.abs(hash >> 8) % intensityPalette.length
   
   const pattern = avatarPatterns[patternIndex]
-  const color = colorPalette[colorIndex]
+  const intensity = intensityPalette[intensityIndex]
   
-  return pattern(color)
+  return pattern(intensity)
 }
 
 // アバターコンポーネント

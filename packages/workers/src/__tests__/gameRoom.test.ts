@@ -448,7 +448,7 @@ describe('GameRoom', () => {
 
   describe('AI Player functionality', () => {
     it('AI名前定数を検証する', () => {
-      const aiNames = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
+      const aiNames = ['アリス', 'ボブ', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
       
       aiNames.forEach(name => {
         expect(typeof name).toBe('string');
