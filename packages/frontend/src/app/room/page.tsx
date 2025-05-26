@@ -478,11 +478,13 @@ export default function RoomPage() {
       <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getSimpleBackground()}`}>
         <div className="text-center">
           <p className="text-red-400 text-lg mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+          <button
+            onClick={() => {
+              window.location.href = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+            }}
+            className="bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-4 py-2 rounded transition-colors"
           >
-            再読み込み
+            戻る
           </button>
         </div>
       </div>
