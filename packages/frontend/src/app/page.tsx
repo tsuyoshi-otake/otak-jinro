@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import RoomPage from './room/page'
 export default function HomePage() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const currentRoomId = searchParams.get('roomId')
   
   // URLパラメータにroomIdがある場合はルームページを表示
@@ -67,7 +66,8 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        router.push(`/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`)
+        const basePath = process.env.NODE_ENV === 'production' ? '/otak-jinro' : ''
+        window.location.href = `${basePath}/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`
       } else {
         alert('ルーム作成に失敗しました: ' + result.error)
       }
@@ -101,7 +101,8 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        router.push(`/?roomId=${roomId.toUpperCase()}&name=${encodeURIComponent(playerName)}`)
+        const basePath = process.env.NODE_ENV === 'production' ? '/otak-jinro' : ''
+        window.location.href = `${basePath}/?roomId=${roomId.toUpperCase()}&name=${encodeURIComponent(playerName)}`
       } else {
         alert('ルーム参加に失敗しました: ' + result.error)
       }
