@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
+    "build:github": "cross-env NODE_ENV=production next build",
+    "export": "next export",
+    "deploy:github": "npm run build:github && echo > out/.nojekyll",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "clean": "rimraf .next",
+    "clean": "rimraf .next out",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
@@ -34,6 +37,7 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "autoprefixer": "^10.0.0",
+    "cross-env": "^7.0.3",
     "eslint": "^8.0.0",
     "eslint-config-next": "^14.0.0",
     "fast-check": "^4.1.1",

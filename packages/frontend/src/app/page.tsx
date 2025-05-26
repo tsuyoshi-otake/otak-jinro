@@ -1,8 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
+import { useSearchParams } from 'next/navigation'
+import RoomPage from './room/page'
 export default function HomePage() {
+  const searchParams = useSearchParams()
+  const currentRoomId = searchParams.get('roomId')
+  
+  // URLパラメータにroomIdがある場合はルームページを表示
+  if (currentRoomId) {
+    return <RoomPage />
+  }
+
   const [roomId, setRoomId] = useState('')
   const [playerName, setPlayerName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -33,7 +42,8 @@ export default function HomePage() {
 
     setIsLoading(true)
     try {
-      const response = await fetch('/api/rooms', {
+      const workersUrl = process.env.NEXT_PUBLIC_WORKERS_URL || 'https://otak-jinro-workers.systemexe-research-and-development.workers.dev'
+      const response = await fetch(`${workersUrl}/api/rooms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,7 +66,7 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        window.location.href = `/room/${result.data.roomId}?name=${encodeURIComponent(playerName)}`
+        window.location.href = `/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`
       } else {
         alert('ルーム作成に失敗しました: ' + result.error)
       }
@@ -76,7 +86,8 @@ export default function HomePage() {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/rooms/${roomId.toUpperCase()}/join`, {
+      const workersUrl = process.env.NEXT_PUBLIC_WORKERS_URL || 'https://otak-jinro-workers.systemexe-research-and-development.workers.dev'
+      const response = await fetch(`${workersUrl}/api/rooms/${roomId.toUpperCase()}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +100,7 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        window.location.href = `/room/${roomId.toUpperCase()}?name=${encodeURIComponent(playerName)}`
+        window.location.href = `/?roomId=${roomId.toUpperCase()}&name=${encodeURIComponent(playerName)}`
       } else {
         alert('ルーム参加に失敗しました: ' + result.error)
       }
