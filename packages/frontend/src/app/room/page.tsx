@@ -88,9 +88,21 @@ export default function RoomPage() {
     show: boolean
   }>({ type: 'vote', title: '', content: '', show: false })
   const [lastSystemMessageId, setLastSystemMessageId] = useState<string | null>(null)
+  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set())
 
-  // 結果モーダルを表示する関数
-  const showResultModal = (type: 'vote' | 'ability' | 'execution' | 'death', title: string, content: string) => {
+  // 結果モーダルを表示する関数（重複防止機能付き）
+  const showResultModal = (type: 'vote' | 'ability' | 'execution' | 'death', title: string, content: string, messageId?: string) => {
+    // 既に表示中のモーダルがある場合はスキップ
+    if (resultModal.show) return
+    
+    // メッセージIDが指定されている場合、重複チェック
+    if (messageId && processedMessageIds.has(messageId)) return
+    
+    // メッセージIDを記録
+    if (messageId) {
+      setProcessedMessageIds(prev => new Set(prev).add(messageId))
+    }
+    
     setResultModal({ type, title, content, show: true })
     
     // 3秒後に自動で閉じる
@@ -107,17 +119,16 @@ export default function RoomPage() {
     if (!roomId || !playerName) {
       setError('ルームIDまたはプレイヤー名が指定されていません')
       setIsInitializing(false)
-      return
+    } else {
+      // 遅延エラー処理
+      const delayedErrorTimer = setTimeout(() => {
+        if (isInitializing && !isConnected) {
+          setDelayedError('接続に時間がかかっています。ページを再読み込みしてください。')
+        }
+      }, 500)
+
+      return () => clearTimeout(delayedErrorTimer)
     }
-
-    // 遅延エラー処理
-    const delayedErrorTimer = setTimeout(() => {
-      if (isInitializing && !isConnected) {
-        setDelayedError('接続に時間がかかっています。ページを再読み込みしてください。')
-      }
-    }, 500)
-
-    return () => clearTimeout(delayedErrorTimer)
   }, [roomId, playerName, isInitializing, isConnected])
 
   // WebSocket接続
@@ -168,11 +179,11 @@ export default function RoomPage() {
                     setLastSystemMessageId(latestMessage.id)
                     
                     if (latestMessage.content.includes('が処刑されました')) {
-                      showResultModal('execution', '処刑結果', latestMessage.content)
+                      showResultModal('execution', '処刑結果', latestMessage.content, latestMessage.id)
                     } else if (latestMessage.content.includes('投票が同数')) {
-                      showResultModal('vote', '投票結果', latestMessage.content)
+                      showResultModal('vote', '投票結果', latestMessage.content, latestMessage.id)
                     } else if (latestMessage.content.includes('が襲撃されました') || latestMessage.content.includes('が死亡しました')) {
-                      showResultModal('death', '夜の結果', latestMessage.content)
+                      showResultModal('death', '夜の結果', latestMessage.content, latestMessage.id)
                     }
                   }
                 }
@@ -185,21 +196,21 @@ export default function RoomPage() {
                 break
               case 'divine_result':
                 setDivineResult(message.message)
-                showResultModal('ability', '占い結果', message.message)
+                showResultModal('ability', '占い結果', message.message, `divine_${Date.now()}`)
                 break
               case 'medium_result':
                 setMediumResult(message.message)
-                showResultModal('ability', '霊視結果', message.message)
+                showResultModal('ability', '霊視結果', message.message, `medium_${Date.now()}`)
                 break
               case 'vote_result':
-                showResultModal('vote', '投票結果', message.message || '投票が完了しました')
+                showResultModal('vote', '投票結果', message.message || '投票が完了しました', `vote_${Date.now()}`)
                 break
               case 'execution_result':
-                showResultModal('execution', '処刑結果', message.message || '処刑が実行されました')
+                showResultModal('execution', '処刑結果', message.message || '処刑が実行されました', `execution_${Date.now()}`)
                 break
               case 'phase_change':
                 if (message.phase === 'night' && message.deathMessage) {
-                  showResultModal('death', '夜の結果', message.deathMessage)
+                  showResultModal('death', '夜の結果', message.deathMessage, `death_${Date.now()}`)
                 }
                 break
               case 'game_ended':
@@ -278,38 +289,37 @@ export default function RoomPage() {
     }
   }, [chatMessages, gameState?.chatMessages])
 
-  // タイマー管理用のref
+  // 完全に独立したタイマー管理
   const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const lastUpdateTimeRef = useRef<number>(Date.now())
+  const currentPhaseRef = useRef<string | null>(null)
+  const [localTimeRemaining, setLocalTimeRemaining] = useState<number>(0)
   
-  // タイマー更新 - サーバーからの更新を優先
+  // フェーズ変更の検出とタイマー初期化
   useEffect(() => {
-    // タイマーをクリア
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-
-    if (!gameState || gameState.phase === 'lobby' || gameState.phase === 'ended') return
-
-    // サーバーからの更新時刻を記録
-    lastUpdateTimeRef.current = Date.now()
+    if (!gameState) return
     
-    // 新しいタイマーを開始
-    timerRef.current = setInterval(() => {
-      setGameState(prev => {
-        if (!prev || prev.timeRemaining <= 0 || prev.phase === 'lobby' || prev.phase === 'ended') return prev
-        
-        // サーバーからの最新更新から1秒以内の場合はスキップ（サーバー更新を優先）
-        if (Date.now() - lastUpdateTimeRef.current < 1500) return prev
-        
-        return {
-          ...prev,
-          timeRemaining: Math.max(0, prev.timeRemaining - 1)
-        }
-      })
-    }, 1000)
-
+    // フェーズが変わった場合のみタイマーをリセット
+    if (currentPhaseRef.current !== gameState.phase) {
+      currentPhaseRef.current = gameState.phase
+      
+      // 既存のタイマーをクリア
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      
+      // ローカル時間を初期化
+      setLocalTimeRemaining(gameState.timeRemaining)
+      
+      // ロビーや終了時はタイマーを開始しない
+      if (gameState.phase === 'lobby' || gameState.phase === 'ended') return
+      
+      // 新しいタイマーを開始
+      timerRef.current = setInterval(() => {
+        setLocalTimeRemaining(prev => Math.max(0, prev - 1))
+      }, 1000)
+    }
+    
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current)
@@ -317,13 +327,13 @@ export default function RoomPage() {
       }
     }
   }, [gameState?.phase, gameState?.timeRemaining])
-
-  // サーバーからの更新時刻を記録
+  
+  // サーバーからの時間更新を受信した場合のみローカル時間を同期
   useEffect(() => {
-    if (gameState) {
-      lastUpdateTimeRef.current = Date.now()
+    if (gameState && gameState.timeRemaining !== undefined) {
+      setLocalTimeRemaining(gameState.timeRemaining)
     }
-  }, [gameState])
+  }, [gameState?.timeRemaining])
 
   const sendMessage = (message: any) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -503,7 +513,7 @@ export default function RoomPage() {
               <h2 className="text-lg font-semibold text-white">{getPhaseDisplay(gameState.phase)}</h2>
               {gameState.phase !== 'lobby' && gameState.phase !== 'ended' && (
                 <p className="text-gray-400 text-sm">
-                  {gameState.currentDay}日目 - 残り時間: {formatTime(gameState.timeRemaining)}
+                  {gameState.currentDay}日目 - 残り時間: {formatTime(localTimeRemaining)}
                 </p>
               )}
             </div>
@@ -552,7 +562,10 @@ export default function RoomPage() {
                   ゲームルール
                 </button>
                 <button
-                  onClick={() => router.push('/')}
+                  onClick={() => {
+                    // URLパラメータを完全にクリアしてランディングページに遷移
+                    window.location.href = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+                  }}
                   className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
                 >
                   退出
@@ -574,7 +587,10 @@ export default function RoomPage() {
                 ゲームルール
               </button>
               <button
-                onClick={() => router.push('/')}
+                onClick={() => {
+                  // URLパラメータを完全にクリアしてランディングページに遷移
+                  window.location.href = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+                }}
                 className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
               >
                 退出
@@ -834,7 +850,10 @@ export default function RoomPage() {
                   結果を閉じる
                 </button>
                 <button
-                  onClick={() => router.push('/')}
+                  onClick={() => {
+                    // URLパラメータを完全にクリアしてランディングページに遷移
+                    window.location.href = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+                  }}
                   className="flex-1 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white py-3 rounded-lg transition-colors font-medium"
                 >
                   ホームに戻る

@@ -7,14 +7,15 @@ export default function HomePage() {
   const searchParams = useSearchParams()
   const currentRoomId = searchParams.get('roomId')
   
+  // すべてのhooksを先に定義
+  const [roomId, setRoomId] = useState('')
+  const [playerName, setPlayerName] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  
   // URLパラメータにroomIdがある場合はルームページを表示
   if (currentRoomId) {
     return <RoomPage />
   }
-
-  const [roomId, setRoomId] = useState('')
-  const [playerName, setPlayerName] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
 
   // コンポーネントマウント時に保存されたプレイヤー名を読み込み
   useEffect(() => {
