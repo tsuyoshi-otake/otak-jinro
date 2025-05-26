@@ -25,6 +25,15 @@ interface Vote {
   timestamp: number
 }
 
+interface ChatMessage {
+  id: string
+  playerId: string
+  playerName: string
+  content: string
+  timestamp: number
+  type: string
+}
+
 interface GameState {
   id: string
   phase: 'lobby' | 'day' | 'night' | 'voting' | 'ended'
@@ -32,12 +41,136 @@ interface GameState {
   currentDay: number
   timeRemaining: number
   votes?: Vote[]
+  chatMessages?: ChatMessage[]
 }
 
 export default function RoomPage() {
   const searchParams = useSearchParams()
   const roomId = searchParams.get('roomId') || ''
   const playerName = searchParams.get('name') || ''
+
+  // 動的背景色を計算する関数（細かいグラデーション対応）
+  const getDynamicBackground = () => {
+    if (!gameState) {
+      return 'bg-gradient-to-br from-blue-900 via-purple-900 to-violet-800'
+    }
+
+    const { phase, timeRemaining } = gameState
+    
+    // フェーズごとの基本時間設定
+    const phaseDurations = {
+      lobby: 0,
+      day: 90,
+      voting: 30,
+      night: 30,
+      ended: 0
+    }
+    
+    const totalTime = phaseDurations[phase] || 90
+    const progress = Math.max(0, Math.min(1, timeRemaining / totalTime))
+    
+    switch (phase) {
+      case 'day':
+        // 昼: 10段階の細かいグラデーション変化（視認性向上のため少し暗めに調整）
+        if (progress > 0.9) {
+          // 90-100%: 早朝の清々しい空（暗めに調整）
+          return 'bg-gradient-to-br from-sky-400 via-blue-500 to-cyan-600'
+        } else if (progress > 0.8) {
+          // 80-90%: 朝の明るい空（暗めに調整）
+          return 'bg-gradient-to-br from-sky-500 via-blue-600 to-cyan-700'
+        } else if (progress > 0.7) {
+          // 70-80%: 午前の青空（暗めに調整）
+          return 'bg-gradient-to-br from-blue-500 via-sky-600 to-blue-700'
+        } else if (progress > 0.6) {
+          // 60-70%: 昼前の空
+          return 'bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800'
+        } else if (progress > 0.5) {
+          // 50-60%: 正午の空
+          return 'bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-700'
+        } else if (progress > 0.4) {
+          // 40-50%: 午後の空
+          return 'bg-gradient-to-br from-indigo-600 via-purple-700 to-pink-700'
+        } else if (progress > 0.3) {
+          // 30-40%: 夕方の空
+          return 'bg-gradient-to-br from-purple-600 via-pink-700 to-orange-700'
+        } else if (progress > 0.2) {
+          // 20-30%: 夕焼け始まり
+          return 'bg-gradient-to-br from-pink-600 via-orange-700 to-red-700'
+        } else if (progress > 0.1) {
+          // 10-20%: 夕焼け本格化
+          return 'bg-gradient-to-br from-orange-600 via-red-700 to-pink-800'
+        } else {
+          // 0-10%: 夕暮れ
+          return 'bg-gradient-to-br from-red-700 via-pink-800 to-purple-900'
+        }
+      
+      case 'voting':
+        // 投票: 10段階の緊張感グラデーション
+        if (progress > 0.9) {
+          return 'bg-gradient-to-br from-red-400 via-pink-500 to-purple-600'
+        } else if (progress > 0.8) {
+          return 'bg-gradient-to-br from-red-500 via-pink-600 to-purple-700'
+        } else if (progress > 0.7) {
+          return 'bg-gradient-to-br from-red-600 via-pink-700 to-purple-800'
+        } else if (progress > 0.6) {
+          return 'bg-gradient-to-br from-red-700 via-pink-800 to-purple-900'
+        } else if (progress > 0.5) {
+          return 'bg-gradient-to-br from-red-800 via-rose-800 to-purple-900'
+        } else if (progress > 0.4) {
+          return 'bg-gradient-to-br from-red-900 via-rose-900 to-violet-900'
+        } else if (progress > 0.3) {
+          return 'bg-gradient-to-br from-rose-800 via-red-900 to-violet-900'
+        } else if (progress > 0.2) {
+          return 'bg-gradient-to-br from-rose-900 via-red-950 to-violet-950'
+        } else if (progress > 0.1) {
+          return 'bg-gradient-to-br from-red-950 via-rose-950 to-purple-950'
+        } else {
+          return 'bg-gradient-to-br from-black via-red-950 to-purple-950'
+        }
+      
+      case 'night':
+        // 夜: 10段階の夜空グラデーション
+        if (progress > 0.9) {
+          // 90-100%: 宵の口
+          return 'bg-gradient-to-br from-slate-600 via-blue-800 to-indigo-800'
+        } else if (progress > 0.8) {
+          // 80-90%: 夜の始まり
+          return 'bg-gradient-to-br from-slate-700 via-blue-900 to-indigo-900'
+        } else if (progress > 0.7) {
+          // 70-80%: 夜が深まる
+          return 'bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900'
+        } else if (progress > 0.6) {
+          // 60-70%: 深夜前
+          return 'bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950'
+        } else if (progress > 0.5) {
+          // 50-60%: 深夜
+          return 'bg-gradient-to-br from-gray-900 via-slate-950 to-blue-950'
+        } else if (progress > 0.4) {
+          // 40-50%: 真夜中
+          return 'bg-gradient-to-br from-black via-slate-950 to-blue-950'
+        } else if (progress > 0.3) {
+          // 30-40%: 夜明け前の静寂
+          return 'bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950'
+        } else if (progress > 0.2) {
+          // 20-30%: 夜明け前
+          return 'bg-gradient-to-br from-indigo-950 via-purple-950 to-blue-900'
+        } else if (progress > 0.1) {
+          // 10-20%: 夜明けの兆し
+          return 'bg-gradient-to-br from-indigo-900 via-purple-900 to-blue-800'
+        } else {
+          // 0-10%: 夜明け直前
+          return 'bg-gradient-to-br from-purple-900 via-indigo-800 to-blue-700'
+        }
+      
+      case 'ended':
+        // 終了: 落ち着いた色合い
+        return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900'
+      
+      default:
+        // ロビー: デフォルト
+        return 'bg-gradient-to-br from-blue-900 via-purple-900 to-violet-800'
+    }
+  }
   
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -79,9 +212,9 @@ export default function RoomPage() {
 
     const connectWebSocket = () => {
       try {
-        const wsUrl = process.env.NODE_ENV === 'production' 
-          ? 'wss://otak-jinro-workers.tsuyoshi-otake.workers.dev/websocket'
-          : 'ws://localhost:8787/websocket'
+        const wsUrl = process.env.NODE_ENV === 'production'
+          ? `wss://otak-jinro-workers.systemexe-research-and-development.workers.dev/api/rooms/${roomId}/ws`
+          : `ws://localhost:8787/api/rooms/${roomId}/ws`
         
         ws.current = new WebSocket(wsUrl)
 
@@ -301,7 +434,7 @@ export default function RoomPage() {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-lg">ルームに接続中...</p>
@@ -315,7 +448,7 @@ export default function RoomPage() {
 
   if (error && !gameState) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
         <div className="text-center">
           <p className="text-red-400 text-lg mb-4">{error}</p>
           <button 
@@ -331,7 +464,7 @@ export default function RoomPage() {
 
   if (!gameState) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-lg">ゲーム状態を読み込み中...</p>
@@ -344,22 +477,28 @@ export default function RoomPage() {
   const isHost = currentPlayer?.isHost || false
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className={`min-h-screen text-white transition-all duration-1000 ${getDynamicBackground()}`}>
       <div className="container mx-auto px-4 py-8">
         {/* ヘッダー */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">人狼ゲーム</h1>
-          <div className="flex items-center gap-4 text-sm text-gray-300">
+        <div className="mb-6 text-center">
+          <h1 className="text-4xl font-bold mb-2">otak-jinro</h1>
+          <div className="flex items-center justify-center gap-4 text-sm text-gray-300">
             <span>ルーム: {gameState.id}</span>
             <span>プレイヤー: {playerName}</span>
-            <span className={`px-2 py-1 rounded ${isConnected ? 'bg-green-600' : 'bg-red-600'}`}>
+            <span className={`px-2 py-1 rounded ${isConnected ? 'bg-green-600/80 backdrop-blur-sm' : 'bg-red-600/80 backdrop-blur-sm'}`}>
               {isConnected ? '接続中' : '切断'}
             </span>
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-3 py-1 text-sm bg-red-500/20 backdrop-blur-sm border border-red-400/30 hover:bg-red-500/30 rounded transition-colors"
+            >
+              退出
+            </button>
           </div>
         </div>
 
         {/* ゲーム状態 */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+        <div className="bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-semibold">{getPhaseDisplay(gameState.phase)}</h2>
@@ -391,15 +530,15 @@ export default function RoomPage() {
                 disabled={gameState.players.length < 4}
                 className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-4 py-2 rounded text-sm"
               >
-                ゲーム開始 ({gameState.players.length}/20)
+                ゲーム開始 ({gameState.players.length}/10)
               </button>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* プレイヤーリスト */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4">
             <h3 className="text-lg font-semibold mb-4">プレイヤー ({gameState.players.length})</h3>
             <div className="space-y-2">
               {gameState.players.map((player) => (
@@ -407,7 +546,7 @@ export default function RoomPage() {
                   key={player.id}
                   className={`flex items-center gap-3 p-2 rounded ${
                     !player.isAlive ? 'opacity-50' : ''
-                  } ${player.name === playerName ? 'bg-blue-900' : 'bg-gray-700'}`}
+                  } ${player.name === playerName ? 'bg-blue-600/30 backdrop-blur-sm border border-blue-400/30' : 'bg-white/5 backdrop-blur-sm border border-white/10'}`}
                 >
                   <Avatar playerName={player.name} size="sm" />
                   <div className="flex-1">
@@ -424,22 +563,35 @@ export default function RoomPage() {
           </div>
 
           {/* チャット */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="lg:col-span-2 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4">
             <h3 className="text-lg font-semibold mb-4">チャット</h3>
             <div
               ref={chatContainerRef}
-              className="h-64 overflow-y-auto mb-4 space-y-2 bg-gray-900 p-3 rounded"
+              className="h-[617px] overflow-y-auto mb-4 space-y-2 bg-black/60 backdrop-blur-md border border-white/20 p-3 rounded"
             >
-              {chatMessages.map((msg, index) => (
-                <div key={index} className="text-sm">
-                  <span className={`font-medium ${
-                    isAIPlayer(msg.playerName) ? 'text-purple-400' : 'text-blue-400'
-                  }`}>
-                    {msg.playerName}:
-                  </span>
-                  <span className="ml-2">{msg.content}</span>
-                </div>
-              ))}
+              {(gameState?.chatMessages || []).map((msg, index) => {
+                const timestamp = new Date(msg.timestamp);
+                const timeStr = timestamp.toLocaleTimeString('ja-JP', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                });
+                
+                return (
+                  <div key={index} className="text-sm">
+                    <span className="text-gray-400 text-xs mr-2">
+                      [{timeStr}]
+                    </span>
+                    <span className={`font-medium ${
+                      isAIPlayer(msg.playerName) ? 'text-purple-400' : 'text-blue-400'
+                    }`}>
+                      {msg.playerName}:
+                    </span>
+                    <span className="ml-2">{msg.content}</span>
+                  </div>
+                );
+              })}
             </div>
             
             {gameState.phase !== 'lobby' && gameState.phase !== 'ended' && currentPlayer?.isAlive && (
@@ -450,7 +602,7 @@ export default function RoomPage() {
                   onChange={(e) => setChatMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleChat()}
                   placeholder="メッセージを入力..."
-                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                  className="flex-1 bg-black/50 backdrop-blur-md border border-white/30 rounded px-3 py-2 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
                   onClick={handleChat}
@@ -464,7 +616,7 @@ export default function RoomPage() {
           </div>
 
           {/* アクション */}
-          <div className="bg-gray-800 rounded-lg p-4">
+          <div className="bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4">
             <h3 className="text-lg font-semibold mb-4">アクション</h3>
             
             {/* 投票 */}
@@ -479,7 +631,7 @@ export default function RoomPage() {
                         key={player.id}
                         onClick={() => handleVote(player.id)}
                         disabled={selectedVoteTarget === player.id}
-                        className="w-full text-left p-2 rounded bg-gray-700 hover:bg-gray-600 disabled:bg-green-700"
+                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-green-600/50 transition-colors"
                       >
                         {player.name} {selectedVoteTarget === player.id && '✓'}
                       </button>
@@ -505,7 +657,7 @@ export default function RoomPage() {
                         key={player.id}
                         onClick={() => handleAbility(player.id)}
                         disabled={selectedAbilityTarget === player.id}
-                        className="w-full text-left p-2 rounded bg-gray-700 hover:bg-gray-600 disabled:bg-green-700"
+                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-green-600/50 transition-colors"
                       >
                         {player.name} {selectedAbilityTarget === player.id && '✓'}
                       </button>
@@ -539,7 +691,7 @@ export default function RoomPage() {
 
             {/* 結果表示 */}
             {divineResult && (
-              <div className="mb-4 p-3 bg-blue-900 rounded">
+              <div className="mb-4 p-3 bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded">
                 <h4 className="font-medium mb-1">占い結果</h4>
                 <p className="text-sm">{divineResult}</p>
                 <button
@@ -552,7 +704,7 @@ export default function RoomPage() {
             )}
 
             {mediumResult && (
-              <div className="mb-4 p-3 bg-purple-900 rounded">
+              <div className="mb-4 p-3 bg-purple-500/20 backdrop-blur-sm border border-purple-400/30 rounded">
                 <h4 className="font-medium mb-1">霊媒結果</h4>
                 <p className="text-sm">{mediumResult}</p>
                 <button
@@ -569,7 +721,7 @@ export default function RoomPage() {
         {/* ゲーム終了モーダル */}
         {gameEndResult && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-6 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold mb-4">ゲーム終了</h2>
               <div className="mb-4">
                 <p className="text-lg mb-2">
@@ -581,7 +733,7 @@ export default function RoomPage() {
               </div>
               <button
                 onClick={() => setGameEndResult(null)}
-                className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded"
+                className="w-full bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 py-2 rounded transition-colors"
               >
                 閉じる
               </button>
@@ -591,7 +743,7 @@ export default function RoomPage() {
 
         {/* エラー表示 */}
         {error && (
-          <div className="fixed bottom-4 right-4 bg-red-600 text-white p-4 rounded-lg shadow-lg">
+          <div className="fixed bottom-4 right-4 bg-red-500/20 backdrop-blur-sm border border-red-400/30 text-white p-4 rounded-lg shadow-lg">
             <p>{error}</p>
             <button
               onClick={() => setError(null)}

@@ -1,4 +1,4 @@
-// OpenAI API統合 - Cloudflare Workers版
+// OpenAI API統合 - Cloudflare Workers版（fetch API使用、GPT-4.1対応）
 import { AIPersonality } from '../../shared/src/types/game';
 
 export interface OpenAIServiceConfig {
@@ -15,7 +15,7 @@ export class OpenAIService {
   constructor(config: OpenAIServiceConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    this.model = config.model || 'gpt-4';
+    this.model = config.model || 'gpt-4.1';
   }
 
   /**
@@ -41,7 +41,14 @@ export class OpenAIService {
         },
       });
 
-      return response.ok;
+      if (response.ok) {
+        const data = await response.json();
+        console.log('OpenAI API test successful, available models:', data.data?.length || 0);
+        return true;
+      } else {
+        console.error('OpenAI API test failed:', response.status, response.statusText);
+        return false;
+      }
     } catch (error) {
       console.error('OpenAI API key test failed:', error);
       return false;
@@ -103,7 +110,7 @@ export class OpenAIService {
       });
 
       if (!response.ok) {
-        console.error('Moderation API error:', response.status);
+        console.error('Moderation API error:', response.status, response.statusText);
         return true; // エラー時は許可
       }
 
@@ -124,39 +131,55 @@ export class OpenAIService {
     personality: AIPersonality
   ): Promise<string> {
     if (!this.validateApiKey()) {
+      console.log('OpenAI API key not available, using fallback response');
       return this.generateFallbackResponse(playerName, gameState, personality);
     }
 
     try {
       const prompt = this.buildGamePrompt(playerName, gameState, personality);
       
+      console.log(`Generating AI response for ${playerName} using model: ${this.model}`);
+      
+      const requestBody = {
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたは人狼ゲームのプレイヤーです。与えられた個性に基づいて、自然で戦略的な発言をしてください。'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.8,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.3
+      };
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'あなたは人狼ゲームのプレイヤーです。与えられた個性に基づいて、自然で戦略的な発言をしてください。'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          max_tokens: 150,
-          temperature: 0.8,
-          frequency_penalty: 0.3,
-          presence_penalty: 0.3
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        console.error('OpenAI API error:', response.status);
+        const errorText = await response.text();
+        console.error('OpenAI API error:', response.status, response.statusText, errorText);
+        
+        // 特定のエラーをチェック
+        if (response.status === 404) {
+          console.error(`Model ${this.model} not found. Available models might be different.`);
+        } else if (response.status === 401) {
+          console.error('Invalid API key');
+        } else if (response.status === 429) {
+          console.error('Rate limit exceeded');
+        }
+        
         return this.generateFallbackResponse(playerName, gameState, personality);
       }
 
@@ -164,11 +187,17 @@ export class OpenAIService {
       const aiResponse = data.choices?.[0]?.message?.content?.trim();
 
       if (aiResponse && aiResponse.length > 0) {
+        console.log(`AI response generated for ${playerName}: ${aiResponse.substring(0, 50)}...`);
+        
         // 穏健化チェック
         const isAppropriate = await this.moderateMessage(aiResponse);
         if (isAppropriate) {
           return aiResponse;
+        } else {
+          console.log('AI response was flagged by moderation, using fallback');
         }
+      } else {
+        console.log('Empty AI response, using fallback');
       }
 
       return this.generateFallbackResponse(playerName, gameState, personality);
@@ -213,9 +242,9 @@ export class OpenAIService {
       return null;
     }
 
-    // 発言頻度の制御
+    // 発言頻度の制御 - 最低20秒間隔
     const timeSinceLastMessage = Date.now() - (player.lastMessageTime || 0);
-    const minInterval = 35000; // 35秒
+    const minInterval = 20000; // 20秒
 
     if (timeSinceLastMessage < minInterval) {
       return null;
@@ -398,17 +427,28 @@ export class OpenAIService {
 
 /**
  * OpenAIサービスのインスタンスを作成
+ *
+ * OpenAI APIキーの取得場所：
+ * - Cloudflare Workers Secrets（暗号化保存）
+ * - ローカル開発: wrangler secret put OPENAI_API_KEY
+ * - 本番環境: GitHub Actions経由で自動設定
+ * - 確認方法: wrangler secret list [--env production]
  */
 export function createOpenAIService(env: any): OpenAIService | null {
+  // env.OPENAI_API_KEY は Cloudflare Workers の Secrets から取得
+  // Secretsは暗号化されてCloudflareのインフラに保存され、
+  // 実行時のみWorkerインスタンスに安全に注入される
   const apiKey = env.OPENAI_API_KEY;
   
   if (!apiKey) {
-    console.warn('OPENAI_API_KEY not found in environment variables');
+    console.warn('OPENAI_API_KEY not found in Cloudflare Workers Secrets');
+    console.warn('設定方法: wrangler secret put OPENAI_API_KEY');
     return null;
   }
 
+  console.log('Creating OpenAI service with GPT-4.1 model');
   return new OpenAIService({
     apiKey,
-    model: 'gpt-4'
+    model: 'gpt-4.1'
   });
 }

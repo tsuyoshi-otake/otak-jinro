@@ -150,7 +150,7 @@ export class GameRoom implements DurableObject {
             votes: [],
             chatMessages: [],
             gameSettings: {
-              maxPlayers: 12,
+              maxPlayers: GAME_CONSTANTS.MAX_PLAYERS,
               dayDuration: 300,
               nightDuration: 120,
               votingDuration: 60,
@@ -435,8 +435,8 @@ export class GameRoom implements DurableObject {
     await this.saveGameState();
     this.broadcastGameState();
     
-    // AIプレイヤーが文脈に応じて反応（無効化 - フロントエンドでOpenAI APIを使用）
-    // this.triggerAIResponse(chatMessage);
+    // AIプレイヤーが文脈に応じて反応
+    this.triggerAIResponse(chatMessage);
   }
 
   private async handleUseAbility(playerId: string, message: any) {
@@ -1638,33 +1638,102 @@ export class GameRoom implements DurableObject {
   }
 
   /**
-   * AI自動発言システム
+   * AI自動発言システム - 個別ランダムタイミング
    */
   private async scheduleAIMessages() {
-    if (!this.gameState || !this.openAIService) {
+    if (!this.gameState) {
       return;
     }
 
-    // 35秒間隔でAI発言をチェック
-    const aiMessageTimer = setInterval(async () => {
-      if (!this.gameState || this.gameState.phase === 'lobby' || this.gameState.phase === 'ended') {
-        return;
-      }
+    console.log('🤖 [AI自動発言] システム開始 - 個別ランダムタイミング');
 
-      const aiPlayers = this.gameState.players.filter(p =>
-        p.isAlive && isAIPlayer(p.name) && p.aiPersonality
-      );
+    const aiPlayers = this.gameState.players.filter(p =>
+      p.isAlive && isAIPlayer(p.name)
+    );
 
-      for (const aiPlayer of aiPlayers) {
+    // 各AIプレイヤーに個別のタイマーを設定
+    aiPlayers.forEach((aiPlayer, index) => {
+      this.scheduleIndividualAIMessage(aiPlayer, index);
+    });
+  }
+
+  /**
+   * 個別AIプレイヤーの発言スケジュール
+   */
+  private scheduleIndividualAIMessage(aiPlayer: Player, index: number) {
+    // 20-40秒のランダム間隔 + 初期遅延でずらす
+    const getRandomInterval = () => Math.floor(Math.random() * 20000) + 20000; // 20-40秒
+    const initialDelay = index * 5000; // 各AIプレイヤーを5秒ずつずらす
+
+    const scheduleNext = () => {
+      const interval = getRandomInterval();
+      const timerId = `ai_message_${aiPlayer.id}`;
+      
+      const timer = setTimeout(async () => {
+        if (!this.gameState || this.gameState.phase === 'lobby' || this.gameState.phase === 'ended') {
+          return;
+        }
+
+        // プレイヤーがまだ生きているかチェック
+        const currentPlayer = this.gameState.players.find(p => p.id === aiPlayer.id);
+        if (!currentPlayer || !currentPlayer.isAlive) {
+          return;
+        }
+
         try {
-          const response = await this.openAIService!.determineAIResponse(this.gameState, aiPlayer);
+          let response: string | null = null;
+
+          // OpenAIサービスが利用可能な場合は使用
+          if (this.openAIService) {
+            try {
+              response = await this.openAIService.determineAIResponse(this.gameState, currentPlayer);
+              if (response) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('ja-JP', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                });
+                console.log(`🤖 [${timeStr}] OpenAI発言 ${currentPlayer.name}: ${response}`);
+              }
+            } catch (error) {
+              console.error(`OpenAI発言生成エラー (${currentPlayer.name}):`, error);
+              // フォールバックとして基本的なAI発言を使用
+              response = this.generateBasicAIMessage(currentPlayer);
+              if (response) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('ja-JP', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                });
+                console.log(`🤖 [${timeStr}] フォールバック発言 ${currentPlayer.name}: ${response}`);
+              }
+            }
+          } else {
+            // OpenAIサービスが利用できない場合は基本的なAI発言を使用
+            response = this.generateBasicAIMessage(currentPlayer);
+            if (response) {
+              const now = new Date();
+              const timeStr = now.toLocaleTimeString('ja-JP', {
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              });
+              console.log(`🤖 [${timeStr}] 基本発言 ${currentPlayer.name}: ${response}`);
+            }
+          }
           
           if (response) {
             // AI発言を送信
+            const now = new Date();
             const chatMessage: ChatMessage = {
               id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              playerId: aiPlayer.id,
-              playerName: aiPlayer.name,
+              playerId: currentPlayer.id,
+              playerName: currentPlayer.name,
               content: response,
               timestamp: Date.now(),
               type: 'public'
@@ -1672,13 +1741,17 @@ export class GameRoom implements DurableObject {
 
             this.gameState.chatMessages.push(chatMessage);
             
-            // 感情状態を更新
-            if (aiPlayer.aiPersonality) {
-              aiPlayer.aiPersonality = this.openAIService!.updateEmotionalState(aiPlayer, this.gameState);
+            // 感情状態を更新（OpenAIサービスが利用可能な場合のみ）
+            if (this.openAIService && currentPlayer.aiPersonality) {
+              try {
+                currentPlayer.aiPersonality = this.openAIService.updateEmotionalState(currentPlayer, this.gameState);
+              } catch (error) {
+                console.error(`感情状態更新エラー (${currentPlayer.name}):`, error);
+              }
             }
 
             // 最後のメッセージ時間を更新
-            (aiPlayer as any).lastMessageTime = Date.now();
+            (currentPlayer as any).lastMessageTime = Date.now();
 
             await this.saveGameState();
 
@@ -1688,16 +1761,98 @@ export class GameRoom implements DurableObject {
               roomId: this.gameState.id,
               message: chatMessage,
               isAI: true,
-              aiPlayerId: aiPlayer.id
+              aiPlayerId: currentPlayer.id
             });
+
+            const timeStr = now.toLocaleTimeString('ja-JP', {
+              hour12: false,
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
+            console.log(`🤖 [${timeStr}] AI発言送信 ${currentPlayer.name}: ${response}`);
           }
         } catch (error) {
-          console.error(`AI発言生成エラー (${aiPlayer.name}):`, error);
+          console.error(`AI発言生成エラー (${currentPlayer.name}):`, error);
         }
-      }
-    }, 35000); // 35秒間隔
 
-    this.timers.set('ai_messages', aiMessageTimer);
+        // 次の発言をスケジュール
+        scheduleNext();
+      }, interval + (index === 0 ? initialDelay : 0));
+
+      this.timers.set(timerId, timer);
+    };
+
+    // 初回スケジュール
+    scheduleNext();
+  }
+
+  /**
+   * 基本的なAI発言生成（OpenAIが利用できない場合のフォールバック）
+   */
+  private generateBasicAIMessage(aiPlayer: Player): string | null {
+    if (!this.gameState) return null;
+
+    // 30%の確率で発言
+    if (Math.random() > 0.3) return null;
+
+    const phase = this.gameState.phase;
+    const role = aiPlayer.role;
+    const currentDay = this.gameState.currentDay || 1;
+    
+    // 他のプレイヤーをランダムに選択
+    const otherPlayers = this.gameState.players.filter(p => p.isAlive && p.id !== aiPlayer.id);
+    const randomPlayer = otherPlayers[Math.floor(Math.random() * otherPlayers.length)]?.name || 'someone';
+
+    const messages: { [key: string]: string[] } = {
+      day: [
+        `${randomPlayer}の発言が気になるな。`,
+        `今日は慎重に議論しよう。`,
+        `${randomPlayer}はどう思う？`,
+        `情報を整理してみよう。`,
+        `${randomPlayer}の行動が怪しい気がする。`,
+        `みんなで協力して真実を見つけよう。`,
+        `${randomPlayer}の意見を聞きたい。`
+      ],
+      voting: [
+        `${randomPlayer}に投票しようと思う。`,
+        `難しい選択だが、${randomPlayer}が怪しい。`,
+        `証拠は少ないが、${randomPlayer}に投票する。`,
+        `消去法で考えると${randomPlayer}かな。`,
+        `${randomPlayer}の弁明を聞きたい。`
+      ],
+      night: [
+        `夜は静かだね...`,
+        `明日はどうなるかな。`,
+        `朝が来るのを待とう。`,
+        `何も起きないといいけど。`
+      ]
+    };
+
+    // 役職に応じた特別なメッセージ
+    if (role === 'seer' && phase === 'day' && currentDay > 1) {
+      const seerMessages = [
+        `占い結果を報告する。${randomPlayer}は${Math.random() < 0.3 ? '人狼' : '村人'}だった。`,
+        `重要な情報がある。${randomPlayer}について話したい。`,
+        `占い師として断言する。${randomPlayer}は信用できる。`,
+        `昨夜の占い結果について話そう。`
+      ];
+      return seerMessages[Math.floor(Math.random() * seerMessages.length)];
+    }
+
+    if (role === 'werewolf') {
+      const werewolfMessages = [
+        `${randomPlayer}の推理は鋭いね。`,
+        `村人として、${randomPlayer}を信じたい。`,
+        `${randomPlayer}の発言に同感だ。`,
+        `慎重に判断しよう。`,
+        `${randomPlayer}の意見は参考になる。`
+      ];
+      return werewolfMessages[Math.floor(Math.random() * werewolfMessages.length)];
+    }
+
+    const phaseMessages = messages[phase] || messages.day;
+    return phaseMessages[Math.floor(Math.random() * phaseMessages.length)];
   }
 
   /**

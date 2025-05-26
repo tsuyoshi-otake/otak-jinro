@@ -1,3 +1,4 @@
+
 // Export type definitions
 export * from './types/game';
 
@@ -7,7 +8,7 @@ export * from './utils/gameUtils';
 // Constants definition
 export const GAME_CONSTANTS = {
   MIN_PLAYERS: 4,
-  MAX_PLAYERS: 20,
+  MAX_PLAYERS: 10,
   DEFAULT_DAY_DURATION: 90,     // 1.5 minutes (was 3)
   DEFAULT_NIGHT_DURATION: 30,   // 30 seconds (was 1 minute)
   DEFAULT_VOTING_DURATION: 30,  // 30 seconds (was 45 seconds)

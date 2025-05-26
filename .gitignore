@@ -184,3 +184,5 @@ pnpm-lock.yaml
 # Local configuration files
 config.local.js
 config.local.json
+# Cloudflare Workers development variables
+.dev.vars
