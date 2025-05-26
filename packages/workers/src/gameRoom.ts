@@ -679,15 +679,26 @@ export class GameRoom implements DurableObject {
     if (winner) {
       this.gameState.phase = 'ended';
       
+      // チーム名を日本語に変換
+      const getTeamDisplayName = (team: string) => {
+        switch (team) {
+          case 'werewolves': return '人狼チーム'
+          case 'villagers': return '村人チーム'
+          default: return team
+        }
+      }
+      
+      const teamDisplayName = getTeamDisplayName(winner)
+      
       // ゲーム終了ログ
-      console.log(`[ゲーム終了] ${winner}チームの勝利！`);
+      console.log(`[ゲーム終了] ${teamDisplayName}の勝利！`);
       
       // 勝利メッセージをチャットに追加
       const winMessage = {
         id: crypto.randomUUID(),
         playerId: 'system',
         playerName: 'System',
-        content: `🎉 ゲーム終了！ ${winner}チームの勝利です！`,
+        content: `ゲーム終了！ ${teamDisplayName}の勝利です！`,
         timestamp: Date.now(),
         type: 'system' as const
       };

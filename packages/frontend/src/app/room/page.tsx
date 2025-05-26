@@ -89,8 +89,9 @@ export default function RoomPage() {
   }>({ type: 'vote', title: '', content: '', show: false })
   const [lastSystemMessageId, setLastSystemMessageId] = useState<string | null>(null)
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set())
+  const [processedContents, setProcessedContents] = useState<Set<string>>(new Set())
 
-  // 結果モーダルを表示する関数（重複防止機能付き）
+  // 結果モーダルを表示する関数（完全重複防止機能付き）
   const showResultModal = (type: 'vote' | 'ability' | 'execution' | 'death', title: string, content: string, messageId?: string) => {
     // 既に表示中のモーダルがある場合はスキップ
     if (resultModal.show) return
@@ -98,10 +99,15 @@ export default function RoomPage() {
     // メッセージIDが指定されている場合、重複チェック
     if (messageId && processedMessageIds.has(messageId)) return
     
-    // メッセージIDを記録
+    // コンテンツベースの重複チェック（絶対に同じ内容を再表示しない）
+    const contentKey = `${type}_${title}_${content}`
+    if (processedContents.has(contentKey)) return
+    
+    // メッセージIDとコンテンツを記録
     if (messageId) {
       setProcessedMessageIds(prev => new Set(prev).add(messageId))
     }
+    setProcessedContents(prev => new Set(prev).add(contentKey))
     
     setResultModal({ type, title, content, show: true })
     
@@ -178,7 +184,10 @@ export default function RoomPage() {
                   if (latestMessage && latestMessage.playerName === 'System' && latestMessage.id !== lastSystemMessageId) {
                     setLastSystemMessageId(latestMessage.id)
                     
-                    if (latestMessage.content.includes('が処刑されました')) {
+                    if (latestMessage.content.includes('ゲーム終了！')) {
+                      // ゲーム終了メッセージをモーダル表示
+                      showResultModal('execution', 'ゲーム終了', latestMessage.content, latestMessage.id)
+                    } else if (latestMessage.content.includes('が処刑されました')) {
                       showResultModal('execution', '処刑結果', latestMessage.content, latestMessage.id)
                     } else if (latestMessage.content.includes('投票が同数')) {
                       showResultModal('vote', '投票結果', latestMessage.content, latestMessage.id)
@@ -809,10 +818,10 @@ export default function RoomPage() {
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="bg-black/80 backdrop-blur-md border border-white/30 rounded-lg p-8 max-w-lg w-full mx-4 shadow-2xl">
               <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold text-white mb-4">🎉 ゲーム終了 🎉</h2>
+                <h2 className="text-3xl font-bold text-white mb-4">ゲーム終了</h2>
                 <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg p-6 mb-4">
                   <p className="text-2xl font-bold text-white mb-2">
-                    🏆 {gameEndResult.winner} の勝利！
+                    {gameEndResult.winner} の勝利！
                   </p>
                   {gameEndResult.reason && (
                     <p className="text-lg text-gray-300 leading-relaxed">{gameEndResult.reason}</p>
@@ -954,14 +963,53 @@ export default function RoomPage() {
 
         {/* 結果表示モーダル */}
         {resultModal.show && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-            <div className="bg-black/90 backdrop-blur-md border-2 border-white/40 rounded-lg p-6 max-w-md w-full shadow-2xl animate-pulse">
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+            <div className={`backdrop-blur-md border-2 rounded-lg p-8 max-w-lg w-full shadow-2xl transform transition-all duration-500 animate-in zoom-in-95 ${
+              resultModal.title === 'ゲーム終了'
+                ? 'bg-gradient-to-br from-purple-900/90 via-blue-900/90 to-purple-900/90 border-purple-400/60 scale-110'
+                : resultModal.type === 'execution'
+                ? 'bg-gradient-to-br from-red-900/90 via-orange-900/90 to-red-900/90 border-red-400/60'
+                : resultModal.type === 'death'
+                ? 'bg-gradient-to-br from-gray-900/90 via-slate-900/90 to-gray-900/90 border-gray-400/60'
+                : 'bg-gradient-to-br from-blue-900/90 via-indigo-900/90 to-blue-900/90 border-blue-400/60'
+            }`}>
               <div className="text-center">
-                <h2 className="text-2xl font-bold text-white mb-4">{resultModal.title}</h2>
-                <div className="bg-white/10 p-4 rounded-lg mb-4">
-                  <p className="text-lg text-white whitespace-pre-line">{resultModal.content}</p>
+                {resultModal.title === 'ゲーム終了' && (
+                  <div className="mb-6">
+                    <div className="text-6xl mb-4 animate-bounce">🏆</div>
+                    <div className="w-full h-1 bg-gradient-to-r from-transparent via-purple-400 to-transparent mb-4 animate-pulse"></div>
+                  </div>
+                )}
+                
+                <h2 className={`font-bold text-white mb-6 ${
+                  resultModal.title === 'ゲーム終了' ? 'text-4xl' : 'text-2xl'
+                }`}>
+                  {resultModal.title}
+                </h2>
+                
+                <div className={`backdrop-blur-sm border rounded-lg p-6 mb-6 ${
+                  resultModal.title === 'ゲーム終了'
+                    ? 'bg-white/20 border-white/40'
+                    : 'bg-white/10 border-white/20'
+                }`}>
+                  <p className={`text-white whitespace-pre-line leading-relaxed ${
+                    resultModal.title === 'ゲーム終了' ? 'text-xl font-semibold' : 'text-lg'
+                  }`}>
+                    {resultModal.content}
+                  </p>
                 </div>
-                <div className="text-sm text-gray-300">
+                
+                {resultModal.title === 'ゲーム終了' && (
+                  <div className="mb-4">
+                    <div className="flex justify-center space-x-2 mb-4">
+                      <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce"></div>
+                      <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="text-sm text-gray-300 opacity-75">
                   このメッセージは自動的に閉じます...
                 </div>
               </div>
