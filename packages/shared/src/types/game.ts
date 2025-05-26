@@ -116,6 +116,7 @@ export type WebSocketMessage =
   | { type: 'vote'; roomId: string; vote: Omit<Vote, 'timestamp'> }
   | { type: 'chat'; roomId: string; message: Omit<ChatMessage, 'id' | 'timestamp'>; isAI?: boolean; aiPlayerId?: string }
   | { type: 'use_ability'; roomId: string; playerId: string; targetId?: string }
+  | { type: 'add_ai_player'; roomId: string }
   | { type: 'game_state_update'; gameState: GameState }
   | { type: 'player_joined'; player: Player }
   | { type: 'player_left'; playerId: string }

@@ -4,6 +4,7 @@ export interface Env {
   PLAYER_DATA: KVNamespace;
   ENVIRONMENT: string;
   CORS_ORIGIN: string;
+  OPENAI_API_KEY?: string;
 }
 
 export interface ExecutionContext {

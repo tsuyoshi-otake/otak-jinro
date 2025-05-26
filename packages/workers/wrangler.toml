@@ -41,3 +41,7 @@ CORS_ORIGIN = "*"
 [env.production.vars]
 ENVIRONMENT = "production"
 CORS_ORIGIN = "*"
+
+# Secrets are managed via GitHub Actions and wrangler secret commands
+# For local development, use: wrangler secret put OPENAI_API_KEY
+# For production, secrets are automatically set during CI/CD deployment

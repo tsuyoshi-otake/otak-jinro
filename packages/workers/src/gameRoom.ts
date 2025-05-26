@@ -14,6 +14,7 @@ import {
 } from '../../shared/src/index';
 
 import { DurableObject, DurableObjectState, Env, CloudflareWebSocket } from './types';
+import { createOpenAIService, OpenAIService } from './openai';
 
 // AI名前の定数
 const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イブ', 'フランク', 'グレース', 'ヘンリー', 'アイビー', 'ジャック', 'ケイト', 'ルーク'];
@@ -26,9 +27,13 @@ export class GameRoom implements DurableObject {
   private gameState: GameState | null = null;
   private websockets: Map<string, CloudflareWebSocket> = new Map();
   private timers: Map<string, any> = new Map();
+  private openAIService: OpenAIService | null = null;
+  private env: Env;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
+    this.env = env;
+    this.openAIService = createOpenAIService(env);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -214,6 +219,9 @@ export class GameRoom implements DurableObject {
       case 'use_ability':
         await this.handleUseAbility(playerId, message);
         break;
+      case 'add_ai_player':
+        await this.handleAddAIPlayer(playerId);
+        break;
     }
   }
 
@@ -350,8 +358,8 @@ export class GameRoom implements DurableObject {
     this.broadcastGameState();
     this.startPhaseTimer();
     
-    // AIプレイヤーのチャットを開始
-    this.startAIChat();
+    // AI自動発言システムを開始
+    this.scheduleAIMessages();
   }
 
   private async handleVote(playerId: string, message: any) {
@@ -611,6 +619,14 @@ export class GameRoom implements DurableObject {
     }, duration * 1000);
 
     this.timers.set('phase', timerId);
+
+    // AI自動行動を実行（投票・夜間能力）
+    if (this.gameState.phase === 'voting' || this.gameState.phase === 'night') {
+      // 少し遅延してからAI行動を開始
+      setTimeout(() => {
+        this.handleAIActions();
+      }, 2000); // 2秒後
+    }
   }
 
   private async nextPhase() {
@@ -1479,5 +1495,319 @@ export class GameRoom implements DurableObject {
         }
       }, delay);
     });
+  }
+
+  /**
+   * AIプレイヤーを追加
+   */
+  private async handleAddAIPlayer(playerId: string) {
+    if (!this.gameState) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ゲーム状態が見つかりません'
+      });
+      return;
+    }
+
+    // ホストのみがAIプレイヤーを追加可能
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player || !player.isHost) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ホストのみがAIプレイヤーを追加できます'
+      });
+      return;
+    }
+
+    // ゲーム開始後は追加不可
+    if (this.gameState.phase !== 'lobby') {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ゲーム開始後はAIプレイヤーを追加できません'
+      });
+      return;
+    }
+
+    // 最大プレイヤー数チェック
+    if (this.gameState.players.length >= 20) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'プレイヤー数が上限に達しています'
+      });
+      return;
+    }
+
+    // 使用可能なAI名前を取得
+    const usedNames = this.gameState.players.map(p => p.name);
+    const availableNames = AI_NAMES.filter(name => !usedNames.includes(name));
+
+    if (availableNames.length === 0) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'これ以上AIプレイヤーを追加できません'
+      });
+      return;
+    }
+
+    // ランダムにAI名前を選択
+    const aiName = availableNames[Math.floor(Math.random() * availableNames.length)];
+    const aiId = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // AI個性を生成
+    let aiPersonality;
+    if (this.openAIService) {
+      try {
+        aiPersonality = await this.openAIService.generateAIPersonality(aiName);
+      } catch (error) {
+        console.error('AI個性生成エラー:', error);
+        // フォールバック個性
+        aiPersonality = {
+          gender: 'neutral' as const,
+          personality: 'analytical' as const,
+          emotionalState: {
+            happiness: 60,
+            anger: 20,
+            fear: 30,
+            confidence: 70,
+            suspicion: 40
+          },
+          traits: ['冷静', '協調的'],
+          speechPattern: 'casual' as const,
+          biases: {
+            trustsEasily: false,
+            quickToAccuse: false,
+            followsLeader: true,
+            independent: false
+          }
+        };
+      }
+    } else {
+      // OpenAIサービスが利用できない場合のデフォルト個性
+      aiPersonality = {
+        gender: 'neutral' as const,
+        personality: 'analytical' as const,
+        emotionalState: {
+          happiness: 60,
+          anger: 20,
+          fear: 30,
+          confidence: 70,
+          suspicion: 40
+        },
+        traits: ['冷静', '協調的'],
+        speechPattern: 'casual' as const,
+        biases: {
+          trustsEasily: false,
+          quickToAccuse: false,
+          followsLeader: true,
+          independent: false
+        }
+      };
+    }
+
+    // AIプレイヤーを作成
+    const aiPlayer: Player = {
+      id: aiId,
+      name: aiName,
+      role: 'villager', // 役職は後で割り当て
+      isAlive: true,
+      isHost: false,
+      isReady: true,
+      joinedAt: Date.now(),
+      aiPersonality
+    };
+
+    // プレイヤーリストに追加
+    this.gameState.players.push(aiPlayer);
+
+    // ゲーム状態を保存
+    await this.saveGameState();
+
+    // 全プレイヤーにゲーム状態更新を送信
+    this.broadcastToAll({
+      type: 'game_state_update',
+      gameState: this.gameState
+    });
+
+    // プレイヤー参加通知を送信
+    this.broadcastToAll({
+      type: 'player_joined',
+      player: aiPlayer
+    });
+
+    console.log(`AIプレイヤー ${aiName} (${aiId}) がルーム ${this.gameState.id} に追加されました`);
+  }
+
+  /**
+   * AI自動発言システム
+   */
+  private async scheduleAIMessages() {
+    if (!this.gameState || !this.openAIService) {
+      return;
+    }
+
+    // 35秒間隔でAI発言をチェック
+    const aiMessageTimer = setInterval(async () => {
+      if (!this.gameState || this.gameState.phase === 'lobby' || this.gameState.phase === 'ended') {
+        return;
+      }
+
+      const aiPlayers = this.gameState.players.filter(p =>
+        p.isAlive && isAIPlayer(p.name) && p.aiPersonality
+      );
+
+      for (const aiPlayer of aiPlayers) {
+        try {
+          const response = await this.openAIService!.determineAIResponse(this.gameState, aiPlayer);
+          
+          if (response) {
+            // AI発言を送信
+            const chatMessage: ChatMessage = {
+              id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              playerId: aiPlayer.id,
+              playerName: aiPlayer.name,
+              content: response,
+              timestamp: Date.now(),
+              type: 'public'
+            };
+
+            this.gameState.chatMessages.push(chatMessage);
+            
+            // 感情状態を更新
+            if (aiPlayer.aiPersonality) {
+              aiPlayer.aiPersonality = this.openAIService!.updateEmotionalState(aiPlayer, this.gameState);
+            }
+
+            // 最後のメッセージ時間を更新
+            (aiPlayer as any).lastMessageTime = Date.now();
+
+            await this.saveGameState();
+
+            // チャットメッセージをブロードキャスト
+            this.broadcastToAll({
+              type: 'chat',
+              roomId: this.gameState.id,
+              message: chatMessage,
+              isAI: true,
+              aiPlayerId: aiPlayer.id
+            });
+          }
+        } catch (error) {
+          console.error(`AI発言生成エラー (${aiPlayer.name}):`, error);
+        }
+      }
+    }, 35000); // 35秒間隔
+
+    this.timers.set('ai_messages', aiMessageTimer);
+  }
+
+  /**
+   * AI自動投票・能力使用
+   */
+  private async handleAIActions() {
+    if (!this.gameState) {
+      return;
+    }
+
+    const aiPlayers = this.gameState.players.filter(p =>
+      p.isAlive && isAIPlayer(p.name)
+    );
+
+    for (const aiPlayer of aiPlayers) {
+      try {
+        if (this.gameState.phase === 'voting') {
+          // 投票フェーズでの自動投票
+          const hasVoted = this.gameState.votes.some(v => v.voterId === aiPlayer.id);
+          if (!hasVoted) {
+            const alivePlayers = this.gameState.players.filter(p =>
+              p.isAlive && p.id !== aiPlayer.id
+            );
+            
+            if (alivePlayers.length > 0) {
+              const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+              
+              // 投票を実行
+              await this.handleVote(aiPlayer.id, {
+                type: 'vote',
+                roomId: this.gameState.id,
+                vote: {
+                  voterId: aiPlayer.id,
+                  targetId: target.id
+                }
+              });
+            }
+          }
+        } else if (this.gameState.phase === 'night') {
+          // 夜フェーズでの能力使用
+          const nightActions = this.gameState.nightActions || [];
+          
+          if (aiPlayer.role === 'werewolf') {
+            const hasActed = nightActions.some(a =>
+              a.actorId === aiPlayer.id && a.type === 'attack'
+            );
+            
+            if (!hasActed) {
+              const targets = this.gameState.players.filter(p =>
+                p.isAlive && p.id !== aiPlayer.id && p.role !== 'werewolf'
+              );
+              
+              if (targets.length > 0) {
+                const target = targets[Math.floor(Math.random() * targets.length)];
+                
+                await this.handleUseAbility(aiPlayer.id, {
+                  type: 'use_ability',
+                  roomId: this.gameState.id,
+                  playerId: aiPlayer.id,
+                  targetId: target.id
+                });
+              }
+            }
+          } else if (aiPlayer.role === 'seer') {
+            const hasActed = nightActions.some(a =>
+              a.actorId === aiPlayer.id && a.type === 'divine'
+            );
+            
+            if (!hasActed) {
+              const targets = this.gameState.players.filter(p =>
+                p.isAlive && p.id !== aiPlayer.id
+              );
+              
+              if (targets.length > 0) {
+                const target = targets[Math.floor(Math.random() * targets.length)];
+                
+                await this.handleUseAbility(aiPlayer.id, {
+                  type: 'use_ability',
+                  roomId: this.gameState.id,
+                  playerId: aiPlayer.id,
+                  targetId: target.id
+                });
+              }
+            }
+          } else if (aiPlayer.role === 'hunter') {
+            const hasActed = nightActions.some(a =>
+              a.actorId === aiPlayer.id && a.type === 'guard'
+            );
+            
+            if (!hasActed) {
+              const targets = this.gameState.players.filter(p =>
+                p.isAlive && p.id !== aiPlayer.id
+              );
+              
+              if (targets.length > 0) {
+                const target = targets[Math.floor(Math.random() * targets.length)];
+                
+                await this.handleUseAbility(aiPlayer.id, {
+                  type: 'use_ability',
+                  roomId: this.gameState.id,
+                  playerId: aiPlayer.id,
+                  targetId: target.id
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`AI行動エラー (${aiPlayer.name}):`, error);
+      }
+    }
   }
 }
