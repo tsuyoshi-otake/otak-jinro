@@ -5,6 +5,9 @@ import {
   GamePhase,
   Vote,
   ChatMessage,
+  SeerResult,
+  MediumResult,
+  VoteRound,
   assignRoles,
   checkWinCondition,
   getExecutionTarget,
@@ -533,9 +536,25 @@ export class GameRoom implements DurableObject {
           const target = this.gameState.players.find(p => p.id === targetId);
           if (target && target.isAlive) {
             const isWerewolf = target.role === 'werewolf';
+            const result = isWerewolf ? '人狼' : '人狼ではありません';
+            
+            // 占い結果をプレイヤーオブジェクトに保存
+            const seerPlayer = this.gameState.players.find(p => p.id === playerId);
+            if (seerPlayer) {
+              if (!seerPlayer.seerResults) {
+                seerPlayer.seerResults = [];
+              }
+              seerPlayer.seerResults.push({
+                day: this.gameState.currentDay,
+                target: target.name,
+                result: result,
+                timestamp: Date.now()
+              });
+            }
+            
             this.sendToPlayer(playerId, {
               type: 'divine_result',
-              message: `${target.name}は${isWerewolf ? '人狼' : '人狼ではありません'}`
+              message: `${target.name}は${result}`
             });
           }
         }
@@ -565,14 +584,44 @@ export class GameRoom implements DurableObject {
       case 'medium':
         if (ability === 'divine' && this.gameState.phase === 'night') {
           // 霊媒師の霊視（前日の処刑者について）
+          const mediumPlayer = this.gameState.players.find(p => p.id === playerId);
+          
           if (this.gameState.lastExecuted) {
             const executed = this.gameState.lastExecuted;
             const isWerewolf = executed.role === 'werewolf';
+            const result = isWerewolf ? '人狼' : '人狼ではありませんでした';
+            
+            // 霊視結果をプレイヤーオブジェクトに保存
+            if (mediumPlayer) {
+              if (!mediumPlayer.mediumResults) {
+                mediumPlayer.mediumResults = [];
+              }
+              mediumPlayer.mediumResults.push({
+                day: this.gameState.currentDay,
+                target: executed.name,
+                result: result,
+                timestamp: Date.now()
+              });
+            }
+            
             this.sendToPlayer(playerId, {
               type: 'medium_result',
-              message: `${executed.name}は${isWerewolf ? '人狼' : '人狼ではありませんでした'}`
+              message: `${executed.name}は${result}`
             });
           } else {
+            // 処刑者がいない場合も記録
+            if (mediumPlayer) {
+              if (!mediumPlayer.mediumResults) {
+                mediumPlayer.mediumResults = [];
+              }
+              mediumPlayer.mediumResults.push({
+                day: this.gameState.currentDay,
+                target: '処刑者なし',
+                result: '昨日は処刑者がいませんでした',
+                timestamp: Date.now()
+              });
+            }
+            
             this.sendToPlayer(playerId, {
               type: 'medium_result',
               message: '昨日は処刑者がいませんでした'
@@ -778,6 +827,19 @@ export class GameRoom implements DurableObject {
       this.gameState.chatMessages.push(tieMessage);
     }
 
+    // 投票履歴を保存
+    if (!this.gameState.voteHistory) {
+      this.gameState.voteHistory = [];
+    }
+    
+    const voteRound = {
+      day: this.gameState.currentDay,
+      votes: [...this.gameState.votes], // 投票のコピーを保存
+      executed: executionTarget || undefined,
+      timestamp: Date.now()
+    };
+    this.gameState.voteHistory.push(voteRound);
+
     this.gameState.votes = [];
     console.log('Voting processing complete');
   }
@@ -846,19 +908,34 @@ export class GameRoom implements DurableObject {
     this.gameState.nightActions = [];
     
     // 霊媒師の能力処理（前日の処刑者について）
-    if (this.gameState.lastExecuted) {
+    if (this.gameState && this.gameState.lastExecuted) {
       const mediums = this.gameState.players.filter(p =>
         p.role === 'medium' && p.isAlive
       );
       
       const executed = this.gameState.lastExecuted;
-      mediums.forEach(medium => {
-        const isWerewolf = executed.role === 'werewolf';
-        this.sendToPlayer(medium.id, {
-          type: 'medium_result',
-          message: `${executed.name}は${isWerewolf ? '人狼' : '人狼ではありませんでした'}`
+      if (executed) {
+        mediums.forEach(medium => {
+          const isWerewolf = executed.role === 'werewolf';
+          const result = isWerewolf ? '人狼' : '人狼ではありませんでした';
+          
+          // 霊視結果をプレイヤーオブジェクトに保存
+          if (!medium.mediumResults) {
+            medium.mediumResults = [];
+          }
+          medium.mediumResults.push({
+            day: this.gameState!.currentDay,
+            target: executed.name,
+            result: result,
+            timestamp: Date.now()
+          });
+          
+          this.sendToPlayer(medium.id, {
+            type: 'medium_result',
+            message: `${executed.name}は${result}`
+          });
         });
-      });
+      }
     }
   }
 

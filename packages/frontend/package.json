@@ -22,7 +22,6 @@
     "clsx": "^2.0.0",
     "lucide-react": "^0.294.0",
     "next": "^14.0.0",
-    "openai": "^4.103.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "tailwind-merge": "^2.0.0"

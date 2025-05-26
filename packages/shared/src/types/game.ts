@@ -31,6 +31,28 @@ export interface AIPersonality {
   };
 }
 
+// Ability result interfaces
+export interface SeerResult {
+  day: number;
+  target: string;
+  result: string;
+  timestamp: number;
+}
+
+export interface MediumResult {
+  day: number;
+  target: string;
+  result: string;
+  timestamp: number;
+}
+
+export interface VoteRound {
+  day: number;
+  votes: Vote[];
+  executed?: string;
+  timestamp: number;
+}
+
 // Player information
 export interface Player {
   id: string;
@@ -42,6 +64,8 @@ export interface Player {
   avatar?: string;
   joinedAt: number;
   aiPersonality?: AIPersonality;  // AI専用の個性データ
+  seerResults?: SeerResult[];     // 占い師の占い結果履歴
+  mediumResults?: MediumResult[]; // 霊媒師の霊視結果履歴
 }
 
 // Vote information
@@ -80,6 +104,7 @@ export interface GameState {
   chatMessages: ChatMessage[];
   nightActions?: NightAction[];
   lastExecuted?: Player | null;  // 前日の処刑者（霊媒師用）
+  voteHistory?: VoteRound[];     // 投票履歴
   gameSettings: GameSettings;
   createdAt: number;
   updatedAt: number;

@@ -145,14 +145,14 @@ export class OpenAIService {
         messages: [
           {
             role: 'system',
-            content: 'あなたは人狼ゲームのプレイヤーです。与えられた個性に基づいて、自然で戦略的な発言をしてください。'
+            content: 'あなたは人狼ゲームのプレイヤーです。与えられた個性と役職に基づいて、戦略的で説得力のある発言をしてください。他プレイヤーの発言を分析し、推理や意見を含む意味のある発言を心がけてください。'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 150,
+        max_tokens: 300,
         temperature: 0.8,
         frequency_penalty: 0.3,
         presence_penalty: 0.3
@@ -346,6 +346,13 @@ export class OpenAIService {
     const currentPlayer = gameState.players.find((p: any) => p.name === playerName);
     const playerRole = currentPlayer?.role || 'unknown';
     
+    // デバッグログ: プレイヤーの能力結果を確認
+    console.log(`[AI Context Debug] ${playerName} (${playerRole}):`, {
+      seerResults: currentPlayer?.seerResults?.length || 0,
+      mediumResults: currentPlayer?.mediumResults?.length || 0,
+      voteHistoryRounds: gameState.voteHistory?.length || 0
+    });
+    
     // 全会話履歴を取得
     const allMessages = (gameState.chatMessages || [])
       .map((msg: any) => `[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '時刻不明'}] ${msg.playerName}: ${msg.content}`)
@@ -434,8 +441,9 @@ ${currentVotes || '（まだ投票がありません）'}
 - 霊媒師: 処刑された人の正体を正確に、または戦略的に偽って報告
 - ハンター: 正体を隠しつつ、人狼を見つけることに集中
 
-上記の全情報を踏まえ、戦略的で自然な発言を50文字以内で生成してください。
-会話の流れを読み、他プレイヤーの発言に具体的に反応してください。
+上記の全情報を踏まえ、戦略的で自然な発言を1-3文で生成してください。
+会話の流れを読み、他プレイヤーの発言に具体的に反応し、あなたの個性を表現してください。
+簡潔でありながらも、推理や意見を含む意味のある発言をしてください。
 `;
   }
 
