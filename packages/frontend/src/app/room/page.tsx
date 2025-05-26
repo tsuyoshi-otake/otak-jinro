@@ -788,23 +788,58 @@ export default function RoomPage() {
 
         {/* ゲーム終了モーダル */}
         {gameEndResult && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-6 max-w-md w-full mx-4">
-              <h2 className="text-2xl font-bold mb-4">ゲーム終了</h2>
-              <div className="mb-4">
-                <p className="text-lg mb-2">
-                  勝者: <span className="font-semibold text-green-400">{gameEndResult.winner}</span>
-                </p>
-                {gameEndResult.reason && (
-                  <p className="text-sm text-gray-300">{gameEndResult.reason}</p>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-black/80 backdrop-blur-md border border-white/30 rounded-lg p-8 max-w-lg w-full mx-4 shadow-2xl">
+              <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold text-white mb-4">🎉 ゲーム終了 🎉</h2>
+                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg p-6 mb-4">
+                  <p className="text-2xl font-bold text-white mb-2">
+                    🏆 {gameEndResult.winner} の勝利！
+                  </p>
+                  {gameEndResult.reason && (
+                    <p className="text-lg text-gray-300 leading-relaxed">{gameEndResult.reason}</p>
+                  )}
+                </div>
+                
+                {/* プレイヤー結果表示 */}
+                {gameState && (
+                  <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4 mb-4">
+                    <h3 className="text-lg font-semibold text-white mb-3">最終結果</h3>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      {gameState.players.map((player) => (
+                        <div key={player.id} className="flex items-center justify-between bg-white/5 rounded p-2">
+                          <div className="flex items-center gap-2">
+                            <Avatar playerName={player.name} size="sm" />
+                            <span className="text-white font-medium">{player.name}</span>
+                            {isAIPlayer(player.name) && <span className="text-xs bg-white/20 border border-white/30 text-white px-1 rounded">AI</span>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-white">{getRoleDisplayName(player.role || '')}</span>
+                            <span className={`text-xs px-2 py-1 rounded ${player.isAlive ? 'bg-white/20 text-white' : 'bg-white/10 text-gray-400'}`}>
+                              {player.isAlive ? '生存' : '死亡'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <button
-                onClick={() => setGameEndResult(null)}
-                className="w-full bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 py-2 rounded transition-colors"
-              >
-                閉じる
-              </button>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setGameEndResult(null)}
+                  className="flex-1 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white py-3 rounded-lg transition-colors font-medium"
+                >
+                  結果を閉じる
+                </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="flex-1 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white py-3 rounded-lg transition-colors font-medium"
+                >
+                  ホームに戻る
+                </button>
+              </div>
             </div>
           </div>
         )}
