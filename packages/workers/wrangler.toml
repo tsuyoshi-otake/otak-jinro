@@ -40,4 +40,4 @@ CORS_ORIGIN = "*"
 
 [env.production.vars]
 ENVIRONMENT = "production"
-CORS_ORIGIN = "https://otak-jinro-game.pages.dev"
+CORS_ORIGIN = "*"
