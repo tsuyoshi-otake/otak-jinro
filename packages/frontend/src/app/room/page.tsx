@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Avatar } from '../../lib/avatars'
 
 // AI名前の定数（表示用）
@@ -59,6 +59,7 @@ interface GameState {
 
 export default function RoomPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const roomId = searchParams.get('roomId') || ''
   const playerName = searchParams.get('name') || ''
 
@@ -277,13 +278,31 @@ export default function RoomPage() {
     }
   }, [chatMessages, gameState?.chatMessages])
 
-  // タイマー更新
+  // タイマー管理用のref
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastUpdateTimeRef = useRef<number>(Date.now())
+  
+  // タイマー更新 - サーバーからの更新を優先
   useEffect(() => {
+    // タイマーをクリア
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+
     if (!gameState || gameState.phase === 'lobby' || gameState.phase === 'ended') return
 
-    const timer = setInterval(() => {
+    // サーバーからの更新時刻を記録
+    lastUpdateTimeRef.current = Date.now()
+    
+    // 新しいタイマーを開始
+    timerRef.current = setInterval(() => {
       setGameState(prev => {
-        if (!prev || prev.timeRemaining <= 0) return prev
+        if (!prev || prev.timeRemaining <= 0 || prev.phase === 'lobby' || prev.phase === 'ended') return prev
+        
+        // サーバーからの最新更新から1秒以内の場合はスキップ（サーバー更新を優先）
+        if (Date.now() - lastUpdateTimeRef.current < 1500) return prev
+        
         return {
           ...prev,
           timeRemaining: Math.max(0, prev.timeRemaining - 1)
@@ -291,8 +310,20 @@ export default function RoomPage() {
       })
     }, 1000)
 
-    return () => clearInterval(timer)
-  }, [gameState?.phase])
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [gameState?.phase, gameState?.timeRemaining])
+
+  // サーバーからの更新時刻を記録
+  useEffect(() => {
+    if (gameState) {
+      lastUpdateTimeRef.current = Date.now()
+    }
+  }, [gameState])
 
   const sendMessage = (message: any) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -521,7 +552,7 @@ export default function RoomPage() {
                   ゲームルール
                 </button>
                 <button
-                  onClick={() => window.location.href = '/'}
+                  onClick={() => router.push('/')}
                   className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
                 >
                   退出
@@ -543,7 +574,7 @@ export default function RoomPage() {
                 ゲームルール
               </button>
               <button
-                onClick={() => window.location.href = '/'}
+                onClick={() => router.push('/')}
                 className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
               >
                 退出
