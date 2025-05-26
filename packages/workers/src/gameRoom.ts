@@ -222,6 +222,9 @@ export class GameRoom implements DurableObject {
       case 'add_ai_player':
         await this.handleAddAIPlayer(playerId);
         break;
+      case 'kick_player':
+        await this.handleKickPlayer(playerId, message);
+        break;
     }
   }
 
@@ -1528,8 +1531,18 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    // AIプレイヤー数の制限チェック（8人まで）
+    const currentAICount = this.gameState.players.filter(p => isAIPlayer(p.name)).length;
+    if (currentAICount >= 8) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'AIプレイヤーは最大8人までです'
+      });
+      return;
+    }
+
     // 最大プレイヤー数チェック
-    if (this.gameState.players.length >= 20) {
+    if (this.gameState.players.length >= this.gameState.gameSettings.maxPlayers) {
       this.sendToPlayer(playerId, {
         type: 'error',
         message: 'プレイヤー数が上限に達しています'
@@ -1964,5 +1977,85 @@ export class GameRoom implements DurableObject {
         console.error(`AI行動エラー (${aiPlayer.name}):`, error);
       }
     }
+  }
+
+  /**
+   * プレイヤーキック処理
+   */
+  private async handleKickPlayer(playerId: string, message: any) {
+    if (!this.gameState) {
+      console.error('ゲーム状態が存在しません');
+      return;
+    }
+
+    // ホストかどうかチェック
+    const kicker = this.gameState.players.find(p => p.id === playerId);
+    if (!kicker || !kicker.isHost) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ホストのみがプレイヤーをキックできます'
+      });
+      return;
+    }
+
+    // ゲーム中はキック不可
+    if (this.gameState.phase !== 'lobby') {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ゲーム中はプレイヤーをキックできません'
+      });
+      return;
+    }
+
+    const targetPlayerId = message.playerId;
+    const targetPlayer = this.gameState.players.find(p => p.id === targetPlayerId);
+    
+    if (!targetPlayer) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'キック対象のプレイヤーが見つかりません'
+      });
+      return;
+    }
+
+    // ホスト自身はキックできない
+    if (targetPlayer.isHost) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ホストをキックすることはできません'
+      });
+      return;
+    }
+
+    // プレイヤーを削除
+    this.gameState.players = this.gameState.players.filter(p => p.id !== targetPlayerId);
+
+    // WebSocket接続を切断
+    const targetWs = this.websockets.get(targetPlayerId);
+    if (targetWs) {
+      try {
+        targetWs.close(1000, 'キックされました');
+      } catch (error) {
+        console.error('WebSocket切断エラー:', error);
+      }
+      this.websockets.delete(targetPlayerId);
+    }
+
+    await this.saveGameState();
+
+    // 全プレイヤーに通知
+    this.broadcastToAll({
+      type: 'player_kicked',
+      playerId: targetPlayerId,
+      playerName: targetPlayer.name,
+      kickedBy: kicker.name
+    });
+
+    this.broadcastToAll({
+      type: 'game_state_update',
+      gameState: this.gameState
+    });
+
+    console.log(`プレイヤー ${targetPlayer.name} (${targetPlayerId}) がホスト ${kicker.name} によってキックされました`);
   }
 }

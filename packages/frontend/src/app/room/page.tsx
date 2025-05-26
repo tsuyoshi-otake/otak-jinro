@@ -10,6 +10,19 @@ const AI_NAMES = ['アリス', 'ボブ', 'チャーリー', 'ダイアナ', 'イ
 // AIプレイヤーかどうかを判定する関数
 const isAIPlayer = (playerName: string) => AI_NAMES.includes(playerName)
 
+// 役職を日本語に変換する関数
+const getRoleDisplayName = (role: string) => {
+  switch (role) {
+    case 'villager': return '村人'
+    case 'werewolf': return '人狼'
+    case 'seer': return '占い師'
+    case 'medium': return '霊媒師'
+    case 'hunter': return 'ハンター'
+    case 'madman': return '狂人'
+    default: return role
+  }
+}
+
 interface Player {
   id: string
   name: string
@@ -49,127 +62,9 @@ export default function RoomPage() {
   const roomId = searchParams.get('roomId') || ''
   const playerName = searchParams.get('name') || ''
 
-  // 動的背景色を計算する関数（細かいグラデーション対応）
-  const getDynamicBackground = () => {
-    if (!gameState) {
-      return 'bg-gradient-to-br from-blue-900 via-purple-900 to-violet-800'
-    }
-
-    const { phase, timeRemaining } = gameState
-    
-    // フェーズごとの基本時間設定
-    const phaseDurations = {
-      lobby: 0,
-      day: 90,
-      voting: 30,
-      night: 30,
-      ended: 0
-    }
-    
-    const totalTime = phaseDurations[phase] || 90
-    const progress = Math.max(0, Math.min(1, timeRemaining / totalTime))
-    
-    switch (phase) {
-      case 'day':
-        // 昼: 10段階の細かいグラデーション変化（視認性向上のため少し暗めに調整）
-        if (progress > 0.9) {
-          // 90-100%: 早朝の清々しい空（暗めに調整）
-          return 'bg-gradient-to-br from-sky-400 via-blue-500 to-cyan-600'
-        } else if (progress > 0.8) {
-          // 80-90%: 朝の明るい空（暗めに調整）
-          return 'bg-gradient-to-br from-sky-500 via-blue-600 to-cyan-700'
-        } else if (progress > 0.7) {
-          // 70-80%: 午前の青空（暗めに調整）
-          return 'bg-gradient-to-br from-blue-500 via-sky-600 to-blue-700'
-        } else if (progress > 0.6) {
-          // 60-70%: 昼前の空
-          return 'bg-gradient-to-br from-blue-600 via-indigo-600 to-blue-800'
-        } else if (progress > 0.5) {
-          // 50-60%: 正午の空
-          return 'bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-700'
-        } else if (progress > 0.4) {
-          // 40-50%: 午後の空
-          return 'bg-gradient-to-br from-indigo-600 via-purple-700 to-pink-700'
-        } else if (progress > 0.3) {
-          // 30-40%: 夕方の空
-          return 'bg-gradient-to-br from-purple-600 via-pink-700 to-orange-700'
-        } else if (progress > 0.2) {
-          // 20-30%: 夕焼け始まり
-          return 'bg-gradient-to-br from-pink-600 via-orange-700 to-red-700'
-        } else if (progress > 0.1) {
-          // 10-20%: 夕焼け本格化
-          return 'bg-gradient-to-br from-orange-600 via-red-700 to-pink-800'
-        } else {
-          // 0-10%: 夕暮れ
-          return 'bg-gradient-to-br from-red-700 via-pink-800 to-purple-900'
-        }
-      
-      case 'voting':
-        // 投票: 10段階の緊張感グラデーション
-        if (progress > 0.9) {
-          return 'bg-gradient-to-br from-red-400 via-pink-500 to-purple-600'
-        } else if (progress > 0.8) {
-          return 'bg-gradient-to-br from-red-500 via-pink-600 to-purple-700'
-        } else if (progress > 0.7) {
-          return 'bg-gradient-to-br from-red-600 via-pink-700 to-purple-800'
-        } else if (progress > 0.6) {
-          return 'bg-gradient-to-br from-red-700 via-pink-800 to-purple-900'
-        } else if (progress > 0.5) {
-          return 'bg-gradient-to-br from-red-800 via-rose-800 to-purple-900'
-        } else if (progress > 0.4) {
-          return 'bg-gradient-to-br from-red-900 via-rose-900 to-violet-900'
-        } else if (progress > 0.3) {
-          return 'bg-gradient-to-br from-rose-800 via-red-900 to-violet-900'
-        } else if (progress > 0.2) {
-          return 'bg-gradient-to-br from-rose-900 via-red-950 to-violet-950'
-        } else if (progress > 0.1) {
-          return 'bg-gradient-to-br from-red-950 via-rose-950 to-purple-950'
-        } else {
-          return 'bg-gradient-to-br from-black via-red-950 to-purple-950'
-        }
-      
-      case 'night':
-        // 夜: 10段階の夜空グラデーション
-        if (progress > 0.9) {
-          // 90-100%: 宵の口
-          return 'bg-gradient-to-br from-slate-600 via-blue-800 to-indigo-800'
-        } else if (progress > 0.8) {
-          // 80-90%: 夜の始まり
-          return 'bg-gradient-to-br from-slate-700 via-blue-900 to-indigo-900'
-        } else if (progress > 0.7) {
-          // 70-80%: 夜が深まる
-          return 'bg-gradient-to-br from-slate-800 via-blue-900 to-indigo-900'
-        } else if (progress > 0.6) {
-          // 60-70%: 深夜前
-          return 'bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950'
-        } else if (progress > 0.5) {
-          // 50-60%: 深夜
-          return 'bg-gradient-to-br from-gray-900 via-slate-950 to-blue-950'
-        } else if (progress > 0.4) {
-          // 40-50%: 真夜中
-          return 'bg-gradient-to-br from-black via-slate-950 to-blue-950'
-        } else if (progress > 0.3) {
-          // 30-40%: 夜明け前の静寂
-          return 'bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950'
-        } else if (progress > 0.2) {
-          // 20-30%: 夜明け前
-          return 'bg-gradient-to-br from-indigo-950 via-purple-950 to-blue-900'
-        } else if (progress > 0.1) {
-          // 10-20%: 夜明けの兆し
-          return 'bg-gradient-to-br from-indigo-900 via-purple-900 to-blue-800'
-        } else {
-          // 0-10%: 夜明け直前
-          return 'bg-gradient-to-br from-purple-900 via-indigo-800 to-blue-700'
-        }
-      
-      case 'ended':
-        // 終了: 落ち着いた色合い
-        return 'bg-gradient-to-br from-gray-700 via-slate-800 to-gray-900'
-      
-      default:
-        // ロビー: デフォルト
-        return 'bg-gradient-to-br from-blue-900 via-purple-900 to-violet-800'
-    }
+  // ランディングページと同じ背景を使用（layout.tsxの背景を継承）
+  const getSimpleBackground = () => {
+    return 'bg-transparent'
   }
   
   const [gameState, setGameState] = useState<GameState | null>(null)
@@ -184,6 +79,7 @@ export default function RoomPage() {
   const [divineResult, setDivineResult] = useState<string | null>(null)
   const [mediumResult, setMediumResult] = useState<string | null>(null)
   const [gameEndResult, setGameEndResult] = useState<any>(null)
+  const [showRulesModal, setShowRulesModal] = useState(false)
   
   const ws = useRef<WebSocket | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
@@ -259,6 +155,26 @@ export default function RoomPage() {
               case 'game_ended':
                 setGameEndResult(message.result)
                 break
+              case 'player_kicked':
+                // キックされたプレイヤーの通知を表示
+                const kickMessage = `${message.playerName} が ${message.kickedBy} によってキックされました`
+                console.log(kickMessage)
+                // チャットメッセージとして表示
+                if (gameState) {
+                  const systemMessage = {
+                    id: Date.now().toString(),
+                    playerId: 'system',
+                    playerName: 'システム',
+                    content: kickMessage,
+                    timestamp: Date.now(),
+                    type: 'system' as const
+                  }
+                  setGameState(prev => prev ? {
+                    ...prev,
+                    chatMessages: [...(prev.chatMessages || []), systemMessage]
+                  } : prev)
+                }
+                break
               case 'error':
                 setError(message.message)
                 break
@@ -298,12 +214,19 @@ export default function RoomPage() {
     return () => clearTimeout(timer)
   }, [roomId, playerName])
 
-  // チャット自動スクロール
+  // チャット自動スクロール（改善版）
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+      // スムーズスクロールで最新メッセージを表示
+      const container = chatContainerRef.current;
+      const scrollToBottom = () => {
+        container.scrollTop = container.scrollHeight;
+      };
+      
+      // 少し遅延させてスクロール（レンダリング完了後）
+      setTimeout(scrollToBottom, 100);
     }
-  }, [chatMessages])
+  }, [chatMessages, gameState?.chatMessages])
 
   // タイマー更新
   useEffect(() => {
@@ -335,6 +258,20 @@ export default function RoomPage() {
         roomId: gameState.id
       })
     }
+  }
+
+  const kickPlayer = (playerId: string) => {
+    if (ws.current && gameState) {
+      sendMessage({
+        type: 'kick_player',
+        roomId: gameState.id,
+        playerId
+      })
+    }
+  }
+
+  const getAIPlayerCount = () => {
+    return gameState?.players.filter(p => isAIPlayer(p.name)).length || 0
   }
 
   const startGame = () => {
@@ -434,7 +371,7 @@ export default function RoomPage() {
 
   if (isInitializing) {
     return (
-      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getSimpleBackground()}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-lg">ルームに接続中...</p>
@@ -448,7 +385,7 @@ export default function RoomPage() {
 
   if (error && !gameState) {
     return (
-      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getSimpleBackground()}`}>
         <div className="text-center">
           <p className="text-red-400 text-lg mb-4">{error}</p>
           <button 
@@ -464,7 +401,7 @@ export default function RoomPage() {
 
   if (!gameState) {
     return (
-      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getDynamicBackground()}`}>
+      <div className={`min-h-screen text-white flex items-center justify-center transition-all duration-1000 ${getSimpleBackground()}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-lg">ゲーム状態を読み込み中...</p>
@@ -477,60 +414,90 @@ export default function RoomPage() {
   const isHost = currentPlayer?.isHost || false
 
   return (
-    <div className={`min-h-screen text-white transition-all duration-1000 ${getDynamicBackground()}`}>
-      <div className="container mx-auto px-4 py-8">
-        {/* ヘッダー */}
-        <div className="mb-6 text-center">
-          <h1 className="text-4xl font-bold mb-2">otak-jinro</h1>
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-300">
-            <span>ルーム: {gameState.id}</span>
-            <span>プレイヤー: {playerName}</span>
-            <span className={`px-2 py-1 rounded ${isConnected ? 'bg-green-600/80 backdrop-blur-sm' : 'bg-red-600/80 backdrop-blur-sm'}`}>
-              {isConnected ? '接続中' : '切断'}
-            </span>
-            <button
-              onClick={() => window.location.href = '/'}
-              className="px-3 py-1 text-sm bg-red-500/20 backdrop-blur-sm border border-red-400/30 hover:bg-red-500/30 rounded transition-colors"
-            >
-              退出
-            </button>
-          </div>
-        </div>
-
+    <div className={`min-h-screen text-white transition-all duration-1000 ${getSimpleBackground()} flex items-center justify-center`}>
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* ゲーム状態 */}
-        <div className="bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4 mb-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-black/40 backdrop-blur-md border border-white/20 rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xl font-semibold">{getPhaseDisplay(gameState.phase)}</h2>
+              <h2 className="text-lg font-semibold text-white">{getPhaseDisplay(gameState.phase)}</h2>
               {gameState.phase !== 'lobby' && gameState.phase !== 'ended' && (
-                <p className="text-gray-300">
+                <p className="text-gray-400 text-sm">
                   {gameState.currentDay}日目 - 残り時間: {formatTime(gameState.timeRemaining)}
                 </p>
               )}
             </div>
             {currentPlayer?.role && (
               <div className="text-right">
-                <p className="text-sm text-gray-300">あなたの役職</p>
-                <p className="text-lg font-semibold text-blue-400">{currentPlayer.role}</p>
+                <p className="text-xs text-gray-400">あなたの役職</p>
+                <p className="text-base font-semibold text-white">{getRoleDisplayName(currentPlayer.role)}</p>
               </div>
             )}
           </div>
 
+          <div className="text-center mb-3 py-2 border-y border-white/10">
+            <div className="flex items-center justify-center gap-4 text-sm text-gray-400">
+              <span>ルーム: {gameState.id}</span>
+              <span>プレイヤー: {playerName}</span>
+            </div>
+          </div>
+
           {/* ロビー時のコントロール */}
-          {gameState.phase === 'lobby' && isHost && (
-            <div className="flex gap-2 mb-4">
+          {isHost && gameState.phase === 'lobby' && (
+            <div className="flex gap-2 mb-2 mt-4 justify-between">
+              <div className="flex gap-2">
+                <button
+                  onClick={addAIPlayer}
+                  disabled={getAIPlayerCount() >= 8}
+                  className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded text-sm transition-colors"
+                >
+                  AI追加 ({getAIPlayerCount()}/8)
+                </button>
+                <button
+                  onClick={startGame}
+                  disabled={gameState.players.length < 4}
+                  className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded text-sm transition-colors"
+                >
+                  ゲーム開始 ({gameState.players.length}/10)
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <span className={`px-4 py-2 rounded text-sm border ${isConnected ? 'bg-white/10 border-white/20 text-white' : 'bg-white/5 border-white/10 text-gray-400'}`}>
+                  {isConnected ? '接続中' : '切断'}
+                </span>
+                <button
+                  onClick={() => setShowRulesModal(true)}
+                  className="px-3 py-2 text-xs bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
+                >
+                  ゲームルール
+                </button>
+                <button
+                  onClick={() => window.location.href = '/'}
+                  className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
+                >
+                  退出
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ゲーム中またはホスト以外の接続状態と退出ボタン */}
+          {(gameState.phase !== 'lobby' || !isHost) && (
+            <div className="flex gap-2 justify-end mt-4">
+              <span className={`px-4 py-2 rounded text-sm border ${isConnected ? 'bg-white/10 border-white/20 text-white' : 'bg-white/5 border-white/10 text-gray-400'}`}>
+                {isConnected ? '接続中' : '切断'}
+              </span>
               <button
-                onClick={addAIPlayer}
-                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded text-sm"
+                onClick={() => setShowRulesModal(true)}
+                className="px-3 py-2 text-xs bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
               >
-                AI追加
+                ゲームルール
               </button>
               <button
-                onClick={startGame}
-                disabled={gameState.players.length < 4}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-4 py-2 rounded text-sm"
+                onClick={() => window.location.href = '/'}
+                className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white rounded transition-colors"
               >
-                ゲーム開始 ({gameState.players.length}/10)
+                退出
               </button>
             </div>
           )}
@@ -552,22 +519,30 @@ export default function RoomPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{player.name}</span>
-                      {player.isHost && <span className="text-xs bg-yellow-600 px-1 rounded">HOST</span>}
-                      {isAIPlayer(player.name) && <span className="text-xs bg-purple-600 px-1 rounded">AI</span>}
+                      {player.isHost && <span className="text-xs bg-white/20 border border-white/30 text-white px-1 rounded">HOST</span>}
+                      {isAIPlayer(player.name) && <span className="text-xs bg-white/20 border border-white/30 text-white px-1 rounded">AI</span>}
                     </div>
                     {!player.isAlive && <span className="text-xs text-red-400">死亡</span>}
                   </div>
+                  {isHost && gameState.phase === 'lobby' && !player.isHost && (
+                    <button
+                      onClick={() => kickPlayer(player.id)}
+                      className="text-xs bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-2 py-1 rounded transition-colors"
+                    >
+                      キック
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           {/* チャット */}
-          <div className="lg:col-span-2 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4">
+          <div className="lg:col-span-2 bg-black/30 backdrop-blur-md border border-white/20 rounded-lg shadow-lg p-4">
             <h3 className="text-lg font-semibold mb-4">チャット</h3>
             <div
               ref={chatContainerRef}
-              className="h-[617px] overflow-y-auto mb-4 space-y-2 bg-black/60 backdrop-blur-md border border-white/20 p-3 rounded"
+              className="h-[617px] overflow-y-auto mb-4 space-y-2 bg-black/40 backdrop-blur-md border border-white/20 p-3 rounded"
             >
               {(gameState?.chatMessages || []).map((msg, index) => {
                 const timestamp = new Date(msg.timestamp);
@@ -578,17 +553,31 @@ export default function RoomPage() {
                   second: '2-digit'
                 });
                 
+                const isOwnMessage = msg.playerName === playerName;
+                
                 return (
-                  <div key={index} className="text-sm">
-                    <span className="text-gray-400 text-xs mr-2">
-                      [{timeStr}]
-                    </span>
-                    <span className={`font-medium ${
-                      isAIPlayer(msg.playerName) ? 'text-purple-400' : 'text-blue-400'
-                    }`}>
-                      {msg.playerName}:
-                    </span>
-                    <span className="ml-2">{msg.content}</span>
+                  <div key={index} className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-3`}>
+                    <div className={`max-w-[70%] ${isOwnMessage ? 'order-2' : 'order-1'}`}>
+                      <div className={`text-xs text-gray-400 mb-1 ${isOwnMessage ? 'text-right' : 'text-left'}`}>
+                        <span className="mr-2">[{timeStr}]</span>
+                        <span className={`font-medium ${
+                          isAIPlayer(msg.playerName) ? 'text-gray-300' : 'text-white'
+                        }`}>
+                          {msg.playerName}
+                        </span>
+                      </div>
+                      <div className={`p-3 rounded-lg text-sm ${
+                        isOwnMessage
+                          ? 'bg-white/20 text-white rounded-br-none'
+                          : 'bg-white/10 text-white rounded-bl-none'
+                      } backdrop-blur-sm border ${
+                        isOwnMessage
+                          ? 'border-white/30'
+                          : 'border-white/20'
+                      }`}>
+                        {msg.content}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -602,12 +591,12 @@ export default function RoomPage() {
                   onChange={(e) => setChatMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleChat()}
                   placeholder="メッセージを入力..."
-                  className="flex-1 bg-black/50 backdrop-blur-md border border-white/30 rounded px-3 py-2 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 bg-black/50 backdrop-blur-md border border-white/30 rounded px-3 py-2 text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50"
                 />
                 <button
                   onClick={handleChat}
                   disabled={!chatMessage.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-4 py-2 rounded"
+                  className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded transition-colors"
                 >
                   送信
                 </button>
@@ -631,7 +620,7 @@ export default function RoomPage() {
                         key={player.id}
                         onClick={() => handleVote(player.id)}
                         disabled={selectedVoteTarget === player.id}
-                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-green-600/50 transition-colors"
+                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-white/20 disabled:border-white/30 transition-colors"
                       >
                         {player.name} {selectedVoteTarget === player.id && '✓'}
                       </button>
@@ -657,7 +646,7 @@ export default function RoomPage() {
                         key={player.id}
                         onClick={() => handleAbility(player.id)}
                         disabled={selectedAbilityTarget === player.id}
-                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-green-600/50 transition-colors"
+                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-white/20 disabled:border-white/30 transition-colors"
                       >
                         {player.name} {selectedAbilityTarget === player.id && '✓'}
                       </button>
@@ -737,6 +726,101 @@ export default function RoomPage() {
               >
                 閉じる
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* ゲームルール説明モーダル */}
+        {showRulesModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">人狼ゲームルール</h2>
+                <button
+                  onClick={() => setShowRulesModal(false)}
+                  className="text-gray-400 hover:text-white text-xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="space-y-4 text-sm text-gray-200">
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">ゲーム概要</h3>
+                  <p>人狼ゲームは、村人チームと人狼チームに分かれて戦う推理ゲームです。村人は人狼を全員処刑すれば勝利、人狼は村人と同数以上になれば勝利です。</p>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">役職説明</h3>
+                  <div className="space-y-2">
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-blue-400">村人</h4>
+                      <p>特別な能力はありませんが、議論と投票で人狼を見つけ出します。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-red-400">人狼</h4>
+                      <p>夜に村人を1人襲撃できます。正体がバレないよう村人のふりをします。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-purple-400">占い師</h4>
+                      <p>夜に1人を占い、その人が人狼かどうかを知ることができます。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-green-400">霊媒師</h4>
+                      <p>前日に処刑された人が人狼だったかどうかを知ることができます。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-yellow-400">ハンター</h4>
+                      <p>処刑または襲撃された時に、道連れで1人を指定して倒すことができます。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-orange-400">狂人</h4>
+                      <p>人狼チームですが、人狼が誰かは知りません。人狼の勝利が自分の勝利です。</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">ゲームの流れ</h3>
+                  <div className="space-y-2">
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-yellow-300">1. 昼の議論</h4>
+                      <p>全員で話し合い、怪しい人を見つけます。チャットで自由に発言できます。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-orange-300">2. 投票</h4>
+                      <p>処刑したい人に投票します。最多票の人が処刑されます。</p>
+                    </div>
+                    <div className="bg-white/5 p-3 rounded">
+                      <h4 className="font-medium text-blue-300">3. 夜時間</h4>
+                      <p>人狼は襲撃対象を、占い師は占い対象を選択します。</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">勝利条件</h3>
+                  <div className="space-y-2">
+                    <div className="bg-blue-500/20 p-3 rounded border border-blue-400/30">
+                      <h4 className="font-medium text-blue-300">村人チーム勝利</h4>
+                      <p>人狼を全員処刑する</p>
+                    </div>
+                    <div className="bg-red-500/20 p-3 rounded border border-red-400/30">
+                      <h4 className="font-medium text-red-300">人狼チーム勝利</h4>
+                      <p>人狼の数が村人と同数以上になる</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setShowRulesModal(false)}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-6 py-2 rounded transition-colors"
+                >
+                  閉じる
+                </button>
+              </div>
             </div>
           </div>
         )}

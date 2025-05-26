@@ -116,7 +116,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8">
+      <div className="w-full max-w-lg space-y-8">
         {/* ヘッダー */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-white">otak-jinro</h1>
@@ -144,22 +144,16 @@ export default function HomePage() {
                 value={playerName}
                 onChange={(e) => handlePlayerNameChange(e.target.value)}
                 maxLength={20}
-                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50"
               />
             </div>
 
-            {/* プレイヤー名が入力されていない場合の注意メッセージ */}
-            {!playerName.trim() && (
-              <div className="text-center text-yellow-400 text-sm bg-yellow-400/10 border border-yellow-400/20 rounded-md p-2">
-                プレイヤー名を入力してください
-              </div>
-            )}
 
             {/* ルーム作成 */}
             <button
               onClick={handleCreateRoom}
               disabled={isLoading || !playerName.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed"
             >
               {isLoading ? '作成中...' : 'ルームを作成'}
             </button>
@@ -178,14 +172,14 @@ export default function HomePage() {
                 onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                 maxLength={6}
                 disabled={!playerName.trim()}
-                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-3 py-2 bg-white/20 border border-white/30 rounded-md text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-white/50 uppercase disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
             <button
               onClick={handleJoinRoom}
               disabled={isLoading || !playerName.trim() || !roomId.trim()}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed"
             >
               {isLoading ? '参加中...' : 'ルームに参加'}
             </button>
