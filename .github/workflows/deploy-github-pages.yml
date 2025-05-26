@@ -3,8 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,28 +30,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install frontend dependencies
-        run: |
-          cd packages/frontend
-          npm ci
-
-      - name: Install shared dependencies
-        run: |
-          cd packages/shared
-          npm ci
-
       - name: Build shared package
         run: |
           cd packages/shared
           npm run build
 
-      - name: Build frontend
+      - name: Build frontend for GitHub Pages
         run: |
           cd packages/frontend
           npm run build:github
         env:
           NEXT_PUBLIC_WORKERS_URL: https://otak-jinro-workers.systemexe-research-and-development.workers.dev
           NEXT_PUBLIC_WS_URL: wss://otak-jinro-workers.systemexe-research-and-development.workers.dev
+
+      - name: Create .nojekyll file
+        run: touch packages/frontend/out/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

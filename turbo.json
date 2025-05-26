@@ -6,6 +6,10 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
+    "build:github": {
+      "dependsOn": ["^build"],
+      "outputs": ["out/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
