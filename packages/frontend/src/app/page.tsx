@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import RoomPage from './room/page'
 export default function HomePage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const currentRoomId = searchParams.get('roomId')
   
   // URLパラメータにroomIdがある場合はルームページを表示
@@ -66,7 +67,7 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        window.location.href = `/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`
+        router.push(`/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`)
       } else {
         alert('ルーム作成に失敗しました: ' + result.error)
       }
@@ -100,7 +101,7 @@ export default function HomePage() {
       const result = await response.json()
       
       if (result.success) {
-        window.location.href = `/?roomId=${roomId.toUpperCase()}&name=${encodeURIComponent(playerName)}`
+        router.push(`/?roomId=${roomId.toUpperCase()}&name=${encodeURIComponent(playerName)}`)
       } else {
         alert('ルーム参加に失敗しました: ' + result.error)
       }
