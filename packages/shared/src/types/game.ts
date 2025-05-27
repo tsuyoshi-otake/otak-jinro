@@ -150,6 +150,7 @@ export type WebSocketMessage =
   | { type: 'ability_used'; message: string }
   | { type: 'divine_result'; message: string }
   | { type: 'medium_result'; message: string }
+  | { type: 'system_message'; message: string; messageId: string }
   | { type: 'error'; message: string };
 
 // API response type

@@ -177,25 +177,6 @@ export default function RoomPage() {
             switch (message.type) {
               case 'game_state_update':
                 setGameState(message.gameState)
-                
-                // チャットメッセージから結果を検出してモーダル表示（重複防止）
-                if (message.gameState.chatMessages) {
-                  const latestMessage = message.gameState.chatMessages[message.gameState.chatMessages.length - 1]
-                  if (latestMessage && latestMessage.playerName === 'System' && latestMessage.id !== lastSystemMessageId) {
-                    setLastSystemMessageId(latestMessage.id)
-                    
-                    if (latestMessage.content.includes('ゲーム終了！')) {
-                      // ゲーム終了メッセージをモーダル表示
-                      showResultModal('execution', 'ゲーム終了', latestMessage.content, latestMessage.id)
-                    } else if (latestMessage.content.includes('が処刑されました')) {
-                      showResultModal('execution', '処刑結果', latestMessage.content, latestMessage.id)
-                    } else if (latestMessage.content.includes('投票が同数')) {
-                      showResultModal('vote', '投票結果', latestMessage.content, latestMessage.id)
-                    } else if (latestMessage.content.includes('が襲撃されました') || latestMessage.content.includes('が死亡しました')) {
-                      showResultModal('death', '夜の結果', latestMessage.content, latestMessage.id)
-                    }
-                  }
-                }
                 break
               case 'chat':
                 // AIメッセージの場合は gameState の更新を待つ
@@ -220,6 +201,22 @@ export default function RoomPage() {
               case 'phase_change':
                 if (message.phase === 'night' && message.deathMessage) {
                   showResultModal('death', '夜の結果', message.deathMessage, `death_${Date.now()}`)
+                }
+                break
+              case 'system_message':
+                // システムメッセージ専用の処理（重複防止）
+                if (message.message && message.messageId !== lastSystemMessageId) {
+                  setLastSystemMessageId(message.messageId)
+                  
+                  if (message.message.includes('ゲーム終了！')) {
+                    showResultModal('execution', 'ゲーム終了', message.message, message.messageId)
+                  } else if (message.message.includes('が処刑されました')) {
+                    showResultModal('execution', '処刑結果', message.message, message.messageId)
+                  } else if (message.message.includes('投票が同数')) {
+                    showResultModal('vote', '投票結果', message.message, message.messageId)
+                  } else if (message.message.includes('が襲撃されました') || message.message.includes('が死亡しました')) {
+                    showResultModal('death', '夜の結果', message.message, message.messageId)
+                  }
                 }
                 break
               case 'game_ended':

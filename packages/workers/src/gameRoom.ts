@@ -742,34 +742,22 @@ export class GameRoom implements DurableObject {
       // ゲーム終了ログ
       console.log(`[ゲーム終了] ${teamDisplayName}の勝利！`);
       
-      // 勝利メッセージをチャットに追加
-      const winMessage = {
-        id: crypto.randomUUID(),
-        playerId: 'system',
-        playerName: 'System',
-        content: `ゲーム終了！ ${teamDisplayName}の勝利です！`,
-        timestamp: Date.now(),
-        type: 'system' as const
-      };
-      this.gameState.chatMessages.push(winMessage);
+      // 勝利メッセージを専用メッセージで送信
+      const winMessageId = crypto.randomUUID();
+      const roleReveal = `📋 役職公開: ${this.gameState.players.map(p =>
+        `${p.name}(${p.role === 'villager' ? '村人' :
+          p.role === 'werewolf' ? '人狼' :
+          p.role === 'seer' ? '占い師' :
+          p.role === 'medium' ? '霊媒師' :
+          p.role === 'hunter' ? '狩人' :
+          p.role === 'madman' ? '狂人' : p.role})`
+      ).join(', ')}`;
       
-      // 全プレイヤーの役職を公開
-      const roleRevealMessage = {
-        id: crypto.randomUUID(),
-        playerId: 'system',
-        playerName: 'System',
-        content: `📋 役職公開: ${this.gameState.players.map(p =>
-          `${p.name}(${p.role === 'villager' ? '村人' :
-            p.role === 'werewolf' ? '人狼' :
-            p.role === 'seer' ? '占い師' :
-            p.role === 'medium' ? '霊媒師' :
-            p.role === 'hunter' ? '狩人' :
-            p.role === 'madman' ? '狂人' : p.role})`
-        ).join(', ')}`,
-        timestamp: Date.now(),
-        type: 'system' as const
-      };
-      this.gameState.chatMessages.push(roleRevealMessage);
+      this.broadcastToAll({
+        type: 'system_message',
+        message: `ゲーム終了！ ${teamDisplayName}の勝利です！\n\n${roleReveal}`,
+        messageId: winMessageId
+      });
     }
 
     this.gameState.updatedAt = Date.now();
@@ -799,32 +787,26 @@ export class GameRoom implements DurableObject {
         // 霊媒師用に処刑者を記録
         this.gameState.lastExecuted = player;
         
-        // 処刑メッセージをチャットに追加
-        const executionMessage = {
-          id: crypto.randomUUID(),
-          playerId: 'system',
-          playerName: 'System',
-          content: `${player.name}が処刑されました。`,
-          timestamp: Date.now(),
-          type: 'system' as const
-        };
-        this.gameState.chatMessages.push(executionMessage);
+        // 処刑結果を専用メッセージで送信（チャットには追加しない）
+        const executionMessageId = crypto.randomUUID();
+        this.broadcastToAll({
+          type: 'system_message',
+          message: `${player.name}が処刑されました。`,
+          messageId: executionMessageId
+        });
         
       }
     } else {
       // 処刑者がいない場合はクリア
       this.gameState.lastExecuted = null;
       console.log('No execution target (tie or no votes)');
-      // 同票の場合のメッセージ
-      const tieMessage = {
-        id: crypto.randomUUID(),
-        playerId: 'system',
-        playerName: 'System',
-        content: '投票が同数のため、誰も処刑されませんでした。',
-        timestamp: Date.now(),
-        type: 'system' as const
-      };
-      this.gameState.chatMessages.push(tieMessage);
+      // 同票の場合のメッセージを専用メッセージで送信
+      const tieMessageId = crypto.randomUUID();
+      this.broadcastToAll({
+        type: 'system_message',
+        message: '投票が同数のため、誰も処刑されませんでした。',
+        messageId: tieMessageId
+      });
     }
 
     // 投票履歴を保存
@@ -865,43 +847,34 @@ export class GameRoom implements DurableObject {
           // 襲撃成功
           victim.isAlive = false;
           
-          // 死亡メッセージ
-          const deathMessage: ChatMessage = {
-            id: `death-${Date.now()}`,
-            playerId: 'system',
-            playerName: 'システム',
-            content: `${victim.name}が人狼に襲撃されました。`,
-            timestamp: Date.now(),
-            type: 'system'
-          };
-          this.gameState.chatMessages.push(deathMessage);
+          // 死亡メッセージを専用メッセージで送信
+          const deathMessageId = `death-${Date.now()}`;
+          this.broadcastToAll({
+            type: 'system_message',
+            message: `${victim.name}が人狼に襲撃されました。`,
+            messageId: deathMessageId
+          });
           
           // 霊媒師に結果を通知（次の夜に）
           this.gameState.lastExecuted = victim;
         } else {
           // 護衛成功
-          const protectionMessage: ChatMessage = {
-            id: `protection-${Date.now()}`,
-            playerId: 'system',
-            playerName: 'システム',
-            content: `昨夜は平和でした。`,
-            timestamp: Date.now(),
-            type: 'system'
-          };
-          this.gameState.chatMessages.push(protectionMessage);
+          const protectionMessageId = `protection-${Date.now()}`;
+          this.broadcastToAll({
+            type: 'system_message',
+            message: `昨夜は平和でした。`,
+            messageId: protectionMessageId
+          });
         }
       }
     } else {
       // 襲撃なしの場合
-      const noAttackMessage: ChatMessage = {
-        id: `no-attack-${Date.now()}`,
-        playerId: 'system',
-        playerName: 'システム',
-        content: `昨夜は平和でした。`,
-        timestamp: Date.now(),
-        type: 'system'
-      };
-      this.gameState.chatMessages.push(noAttackMessage);
+      const noAttackMessageId = `no-attack-${Date.now()}`;
+      this.broadcastToAll({
+        type: 'system_message',
+        message: `昨夜は平和でした。`,
+        messageId: noAttackMessageId
+      });
     }
     
     // 夜間アクションをクリア
