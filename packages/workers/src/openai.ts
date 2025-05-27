@@ -156,6 +156,15 @@ export class OpenAIService {
       
       console.log(`Generating AI response for ${playerName} using model: ${this.model}`);
       
+      // 発言の長さを動的に制御（3回に1回は長い発言、他は短い発言）
+      const currentPlayer = gameState.players.find((p: any) => p.name === playerName);
+      const messageCount = (currentPlayer?.messageCount || 0) + 1;
+      const isLongMessage = messageCount % 3 === 0; // 3回に1回は長い発言
+      const maxTokens = isLongMessage ? 100 : 50;
+      const lengthInstruction = isLongMessage ?
+        '2-3文で詳しく' :
+        '1文で簡潔に';
+
       const requestBody = {
         model: this.model,
         messages: [
@@ -164,7 +173,7 @@ export class OpenAIService {
             content: `あなたは人狼ゲームの世界の住民です。以下の重要なルールに従ってください：
 
 1. 最新の会話履歴を必ず読み、直前の発言に反応してください
-2. 1-2文の短い発言で、自然な会話の流れを作ってください
+2. ${lengthInstruction}発言してください
 3. 自分の陣営に応じた感情を表現してください：
    - 村人陣営：死への恐怖、仲間を失う悲しみ、人狼への怒りを表現
    - 人狼陣営：狩りの興奮、村人を騙す楽しさ、殺戮への満足感を内に秘める
@@ -182,7 +191,7 @@ export class OpenAIService {
           type: 'text'
         },
         temperature: 0.7,
-        max_completion_tokens: 100,
+        max_completion_tokens: maxTokens,
         top_p: 1,
         frequency_penalty: 0,
         presence_penalty: 0
@@ -448,9 +457,9 @@ export class OpenAIService {
       voteHistoryRounds: gameState.voteHistory?.length || 0
     });
     
-    // 最新の会話履歴を取得（最新10件に制限して文脈を保持）
+    // 最新の会話履歴を取得（最新30件に制限して文脈を保持）
     const recentMessages = (gameState.chatMessages || [])
-      .slice(-10) // 最新10件のメッセージのみ
+      .slice(-30) // 最新30件のメッセージのみ
       .map((msg: any) => `[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '時刻不明'}] ${msg.playerName}: ${msg.content}`)
       .join('\n');
 
@@ -503,7 +512,7 @@ ${strategicBias}
 - 生存者: ${gameState.players.filter((p: any) => p.isAlive).map((p: any) => p.name).join(', ')}
 - 死亡者: ${deathInfo || 'なし'}
 
-【最新会話履歴（最新10件）】
+【最新会話履歴（最新30件）】
 ${recentMessages || '（まだ発言がありません）'}
 
 【投票履歴】
