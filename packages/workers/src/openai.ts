@@ -180,6 +180,12 @@ export class OpenAIService {
 4. 他のプレイヤーの発言に具体的に言及し、会話を続けてください
 5. 人狼ゲームの緊張感のある雰囲気を演出してください
 
+【特別重要】自分に対する質問や言及には必ず反応してください：
+- 自分の名前が呼ばれた場合は必ず応答
+- 質問されたら必ず答える
+- 批判や攻撃を受けたら必ず反論または釈明
+- 無視は絶対にしない
+
 重要：会話の文脈を理解し、自然で感情豊かな発言をしてください。`
           },
           {
@@ -553,6 +559,12 @@ ${currentVotes || '（まだ投票がありません）'}
 4. あなたの役職に基づいた視点で発言してください
 5. 現在の投票状況や死亡者を考慮した発言をしてください
 
+【最優先】自分への直接的な言及がある場合は必ず反応してください：
+- 自分の名前が呼ばれている → 必ず応答
+- 質問されている → 必ず答える
+- 批判・攻撃されている → 必ず反論または釈明
+- 意見を求められている → 必ず自分の考えを述べる
+
 例：
 - 「アリスさんの先ほどの発言は矛盾していますね。昨日は○○と言っていたのに...」
 - 「ボブさんに同意します。チャーリーさんの行動は確かに怪しい」
@@ -676,6 +688,25 @@ ${currentVotes || '（まだ投票がありません）'}
   private calculateSpeakProbability(player: any, gameState: any): number {
     const personality = player.aiPersonality;
     let probability = 0.3; // ベース確率を0.6から0.3に下げて頻度調整
+    
+    // 自分への言及チェック（最新5件のメッセージをチェック）
+    const mentionMessages = (gameState.chatMessages || []).slice(-5);
+    const isDirectlyMentioned = mentionMessages.some((msg: any) =>
+      msg.content && (
+        msg.content.includes(player.name) ||
+        msg.content.includes(`${player.name}さん`) ||
+        msg.content.includes(`${player.name}は`) ||
+        msg.content.includes(`${player.name}が`) ||
+        msg.content.includes(`${player.name}を`) ||
+        msg.content.includes(`${player.name}に`)
+      )
+    );
+    
+    // 直接言及された場合は高確率で発言
+    if (isDirectlyMentioned) {
+      probability += 0.6; // 大幅に確率アップ
+      console.log(`[AI] ${player.name} was directly mentioned, increasing speak probability`);
+    }
 
     // 性格タイプによる調整
     if (personality.personality === 'aggressive' || personality.personality === 'charismatic') {
