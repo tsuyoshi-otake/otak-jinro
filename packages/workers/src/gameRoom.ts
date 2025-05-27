@@ -1794,47 +1794,45 @@ export class GameRoom implements DurableObject {
         try {
           let response: string | null = null;
 
+          // デバッグログ：OpenAIサービスの状態を確認
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('ja-JP', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+          
+          console.log(`🔍 [${timeStr}] AI発言生成開始 ${currentPlayer.name}:`, {
+            hasOpenAIService: !!this.openAIService,
+            hasAIPersonality: !!currentPlayer.aiPersonality,
+            chatMessagesCount: this.gameState.chatMessages?.length || 0
+          });
+
           // OpenAIサービスが利用可能な場合は使用
           if (this.openAIService) {
             try {
+              console.log(`🤖 [${timeStr}] OpenAI APIを呼び出し中... ${currentPlayer.name}`);
               response = await this.openAIService.determineAIResponse(this.gameState, currentPlayer);
               if (response) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('ja-JP', {
-                  hour12: false,
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                });
-                console.log(`🤖 [${timeStr}] OpenAI発言 ${currentPlayer.name}: ${response}`);
+                console.log(`🤖 [${timeStr}] OpenAI発言生成成功 ${currentPlayer.name}: ${response}`);
+              } else {
+                console.log(`⚠️ [${timeStr}] OpenAI APIからの応答なし ${currentPlayer.name}`);
               }
             } catch (error) {
-              console.error(`OpenAI発言生成エラー (${currentPlayer.name}):`, error);
+              console.error(`❌ [${timeStr}] OpenAI発言生成エラー (${currentPlayer.name}):`, error);
               // フォールバックとして基本的なAI発言を使用
               response = this.generateBasicAIMessage(currentPlayer);
               if (response) {
-                const now = new Date();
-                const timeStr = now.toLocaleTimeString('ja-JP', {
-                  hour12: false,
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                });
-                console.log(`🤖 [${timeStr}] フォールバック発言 ${currentPlayer.name}: ${response}`);
+                console.log(`🔄 [${timeStr}] フォールバック発言使用 ${currentPlayer.name}: ${response}`);
               }
             }
           } else {
             // OpenAIサービスが利用できない場合は基本的なAI発言を使用
+            console.log(`⚠️ [${timeStr}] OpenAIサービス未設定のため基本発言を使用 ${currentPlayer.name}`);
             response = this.generateBasicAIMessage(currentPlayer);
             if (response) {
-              const now = new Date();
-              const timeStr = now.toLocaleTimeString('ja-JP', {
-                hour12: false,
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-              });
-              console.log(`🤖 [${timeStr}] 基本発言 ${currentPlayer.name}: ${response}`);
+              console.log(`💬 [${timeStr}] 基本発言生成 ${currentPlayer.name}: ${response}`);
             }
           }
           

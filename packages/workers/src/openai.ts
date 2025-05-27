@@ -145,17 +145,29 @@ export class OpenAIService {
         messages: [
           {
             role: 'system',
-            content: 'あなたは人狼ゲームのプレイヤーです。与えられた個性と役職に基づいて、戦略的で説得力のある発言をしてください。他プレイヤーの発言を分析し、推理や意見を含む意味のある発言を心がけてください。'
+            content: `あなたは人狼ゲームのプレイヤーです。以下の重要なルールに従ってください：
+
+1. 必ず他のプレイヤーの最近の発言に言及し、それに対する反応や意見を述べてください
+2. 具体的なプレイヤー名を挙げて、その人の発言や行動について言及してください
+3. 自分の役職と個性に基づいた戦略的な発言をしてください
+4. 会話の流れを無視した一般的な発言は避けてください
+5. 1-3文の簡潔で意味のある発言をしてください
+
+重要：全会話履歴を読み、最新の話題や議論に参加してください。`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 300,
-        temperature: 0.8,
-        frequency_penalty: 0.3,
-        presence_penalty: 0.3
+        response_format: {
+          type: 'text'
+        },
+        temperature: 1,
+        max_completion_tokens: 2048,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0
       };
 
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -216,21 +228,39 @@ export class OpenAIService {
     }
 
     const personality = { ...player.aiPersonality };
+    const emotionalState = { ...personality.emotionalState };
 
     // ゲーム進行に基づく感情の変化
     if (gameState.phase === 'day') {
-      personality.stress = Math.min(10, personality.stress + 1);
+      // 昼フェーズでは恐怖と怒りが上昇
+      emotionalState.fear = Math.min(100, emotionalState.fear + 5);
+      emotionalState.anger = Math.min(100, emotionalState.anger + 3);
     } else if (gameState.phase === 'night') {
-      personality.stress = Math.max(1, personality.stress - 1);
+      // 夜フェーズでは恐怖が大幅上昇、幸福度低下
+      emotionalState.fear = Math.min(100, emotionalState.fear + 10);
+      emotionalState.happiness = Math.max(0, emotionalState.happiness - 5);
     }
 
-    // 投票された場合のストレス増加
+    // 投票された場合の感情変化
     const votesAgainst = gameState.votes?.filter((vote: any) => vote.targetId === player.id).length || 0;
     if (votesAgainst > 0) {
-      personality.stress = Math.min(10, personality.stress + votesAgainst);
-      personality.confidence = Math.max(1, personality.confidence - 1);
+      emotionalState.fear = Math.min(100, emotionalState.fear + votesAgainst * 10);
+      emotionalState.anger = Math.min(100, emotionalState.anger + votesAgainst * 8);
+      emotionalState.confidence = Math.max(0, emotionalState.confidence - votesAgainst * 10);
+      emotionalState.suspicion = Math.min(100, emotionalState.suspicion + votesAgainst * 5);
     }
 
+    // 生存者数による感情変化
+    const aliveCount = gameState.players.filter((p: any) => p.isAlive).length;
+    const totalCount = gameState.players.length;
+    const deathRate = 1 - (aliveCount / totalCount);
+    
+    if (deathRate > 0.3) {
+      emotionalState.fear = Math.min(100, emotionalState.fear + deathRate * 20);
+      emotionalState.happiness = Math.max(0, emotionalState.happiness - deathRate * 15);
+    }
+
+    personality.emotionalState = emotionalState;
     return personality;
   }
 
@@ -238,7 +268,14 @@ export class OpenAIService {
    * AI応答の判定
    */
   async determineAIResponse(gameState: any, player: any): Promise<string | null> {
+    console.log(`[OpenAI] determineAIResponse called for ${player.name}`, {
+      hasAIPersonality: !!player.aiPersonality,
+      playerRole: player.role,
+      isAlive: player.isAlive
+    });
+
     if (!player.aiPersonality) {
+      console.log(`[OpenAI] ${player.name} has no AI personality, skipping`);
       return null;
     }
 
@@ -247,16 +284,22 @@ export class OpenAIService {
     const minInterval = 10000; // 10秒
 
     if (timeSinceLastMessage < minInterval) {
+      console.log(`[OpenAI] ${player.name} spoke too recently (${timeSinceLastMessage}ms ago), skipping`);
       return null;
     }
 
     // 発言確率の計算
     const speakProbability = this.calculateSpeakProbability(player, gameState);
+    const randomValue = Math.random();
     
-    if (Math.random() > speakProbability) {
+    console.log(`[OpenAI] ${player.name} speak probability: ${speakProbability}, random: ${randomValue}`);
+    
+    if (randomValue > speakProbability) {
+      console.log(`[OpenAI] ${player.name} decided not to speak this time`);
       return null;
     }
 
+    console.log(`[OpenAI] ${player.name} will speak, generating response...`);
     return await this.generateAIResponse(player.name, gameState, player.aiPersonality);
   }
 
@@ -309,34 +352,51 @@ export class OpenAIService {
    * フォールバック応答を生成
    */
   private generateFallbackResponse(playerName: string, gameState: any, personality: AIPersonality): string {
-    const responses = [
-      'みなさん、どう思いますか？',
-      '今のところ特に怪しい人はいませんね。',
-      'もう少し情報が欲しいところです。',
-      '慎重に判断したいと思います。',
-      'みなさんの意見を聞かせてください。',
-      '今日は様子を見ましょう。',
-      '何かおかしいと感じる人はいますか？',
-      'まだ判断材料が少ないですね。'
-    ];
+    // 最新のチャットメッセージから他のプレイヤーを取得
+    const recentMessages = (gameState.chatMessages || []).slice(-5);
+    const otherPlayers = gameState.players
+      .filter((p: any) => p.isAlive && p.name !== playerName)
+      .map((p: any) => p.name);
+    
+    if (otherPlayers.length === 0) {
+      return 'みなさん、どう思いますか？';
+    }
 
-    const phaseResponses = {
+    const randomPlayer = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
+    
+    // フェーズに応じた文脈的な発言
+    const contextualResponses: { [key: string]: string[] } = {
       day: [
-        '昨夜は何か気になることはありましたか？',
-        '今日は誰を疑うべきでしょうか？',
-        'みなさんの発言を注意深く聞いています。'
+        `${randomPlayer}さんの意見はどうですか？`,
+        `${randomPlayer}さん、昨夜は何か気づいたことはありますか？`,
+        `私は${randomPlayer}さんの行動が気になります。`,
+        `${randomPlayer}さんの発言について、みなさんはどう思いますか？`,
+        `${randomPlayer}さんを信じていいのでしょうか？`
       ],
       voting: [
-        '投票は難しい判断ですね。',
-        'よく考えて投票したいと思います。',
-        '今までの議論を整理しましょう。'
+        `${randomPlayer}さんに投票しようと思いますが、どうでしょう？`,
+        `${randomPlayer}さんの弁明を聞きたいです。`,
+        `私は${randomPlayer}さんが怪しいと思います。`,
+        `${randomPlayer}さんか、それとも他の誰かか...`,
+        `${randomPlayer}さんについて、もう一度考えてみましょう。`
+      ],
+      night: [
+        '静かな夜ですね...',
+        '朝が待ち遠しいです。',
+        '誰が襲われるか心配です。'
       ]
     };
 
-    const phaseSpecific = phaseResponses[gameState.phase as keyof typeof phaseResponses] || [];
-    const allResponses = [...responses, ...phaseSpecific];
-
-    return allResponses[Math.floor(Math.random() * allResponses.length)];
+    const phaseResponses = contextualResponses[gameState.phase] || contextualResponses.day;
+    
+    // 性格に応じた調整
+    if (personality.personality === 'aggressive') {
+      return phaseResponses.find(r => r.includes('怪しい') || r.includes('投票')) || phaseResponses[0];
+    } else if (personality.personality === 'cautious') {
+      return phaseResponses.find(r => r.includes('どう思い') || r.includes('意見')) || phaseResponses[0];
+    }
+    
+    return phaseResponses[Math.floor(Math.random() * phaseResponses.length)];
   }
 
   /**
@@ -441,9 +501,19 @@ ${currentVotes || '（まだ投票がありません）'}
 - 霊媒師: 処刑された人の正体を正確に、または戦略的に偽って報告
 - ハンター: 正体を隠しつつ、人狼を見つけることに集中
 
-上記の全情報を踏まえ、戦略的で自然な発言を1-3文で生成してください。
-会話の流れを読み、他プレイヤーの発言に具体的に反応し、あなたの個性を表現してください。
-簡潔でありながらも、推理や意見を含む意味のある発言をしてください。
+【重要な指示】
+1. 必ず最新の会話履歴から1-2人のプレイヤーの発言を引用または言及してください
+2. 「○○さんの言うとおり」「○○さんが怪しい」など、具体的な名前を使ってください
+3. 一般的な発言（「様子を見ましょう」など）は避けてください
+4. あなたの役職に基づいた視点で発言してください
+5. 現在の投票状況や死亡者を考慮した発言をしてください
+
+例：
+- 「アリスさんの先ほどの発言は矛盾していますね。昨日は○○と言っていたのに...」
+- 「ボブさんに同意します。チャーリーさんの行動は確かに怪しい」
+- 「ダイアナさん、なぜそんなに私を疑うんですか？」
+
+上記を踏まえ、1-3文で自然な発言を生成してください。
 `;
   }
 
@@ -560,11 +630,29 @@ ${currentVotes || '（まだ投票がありません）'}
     const personality = player.aiPersonality;
     let probability = 0.3; // ベース確率
 
-    // 攻撃性が高いほど発言しやすい
-    probability += personality.aggressiveness * 0.02;
+    // 性格タイプによる調整
+    if (personality.personality === 'aggressive' || personality.personality === 'charismatic') {
+      probability += 0.2;
+    } else if (personality.personality === 'cautious' || personality.personality === 'quiet') {
+      probability -= 0.1;
+    }
 
-    // ストレスが高いほど発言しやすい
-    probability += personality.stress * 0.03;
+    // 感情状態による調整
+    // 怒りが高いほど発言しやすい
+    probability += (personality.emotionalState.anger / 100) * 0.2;
+    
+    // 自信が高いほど発言しやすい
+    probability += (personality.emotionalState.confidence / 100) * 0.15;
+    
+    // 恐怖が高いと発言しにくい
+    probability -= (personality.emotionalState.fear / 100) * 0.1;
+
+    // 話し方パターンによる調整
+    if (personality.speechPattern === 'talkative') {
+      probability += 0.2;
+    } else if (personality.speechPattern === 'quiet') {
+      probability -= 0.15;
+    }
 
     // 昼フェーズでは発言確率が高い
     if (gameState.phase === 'day') {
@@ -576,7 +664,15 @@ ${currentVotes || '（まだ投票がありません）'}
       probability -= 0.1;
     }
 
-    return Math.min(1.0, Math.max(0.1, probability));
+    // 最近の会話が活発な場合は発言確率を上げる
+    const recentMessages = (gameState.chatMessages || []).filter((msg: any) =>
+      Date.now() - msg.timestamp < 60000 // 1分以内
+    );
+    if (recentMessages.length > 5) {
+      probability += 0.1;
+    }
+
+    return Math.min(0.8, Math.max(0.2, probability));
   }
 }
 
