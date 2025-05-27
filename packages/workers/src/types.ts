@@ -2,6 +2,7 @@
 export interface Env {
   GAME_ROOMS: DurableObjectNamespace;
   PLAYER_DATA: KVNamespace;
+  PUBLIC_ROOMS: KVNamespace;
   ENVIRONMENT: string;
   CORS_ORIGIN: string;
   OPENAI_API_KEY?: string;

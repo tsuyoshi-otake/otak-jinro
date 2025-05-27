@@ -14,6 +14,10 @@ class_name = "GameRoom"
 binding = "PLAYER_DATA"
 id = "9e01ad23ddb04f289d0614e8a4a018f8"
 
+[[env.production.kv_namespaces]]
+binding = "PUBLIC_ROOMS"
+id = "public_rooms_namespace_id"
+
 [env.staging]
 name = "otak-jinro-workers-staging"
 
@@ -32,6 +36,11 @@ new_classes = [ "GameRoom" ]
 binding = "PLAYER_DATA"
 id = "9e01ad23ddb04f289d0614e8a4a018f8"
 preview_id = "d71e2801a36f4359b196277a2990cf96"
+
+[[kv_namespaces]]
+binding = "PUBLIC_ROOMS"
+id = "public_rooms_namespace_id"
+preview_id = "public_rooms_preview_id"
 
 # Environment Variables
 [vars]

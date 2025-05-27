@@ -40,6 +40,7 @@ describe('gameUtils', () => {
       enableSpectators: false,
       customRoles: []
     },
+    isPublic: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
   });

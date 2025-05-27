@@ -55,6 +55,16 @@ export default {
         return await handleWebSocket(request, env, roomId);
       }
 
+      // 公開ルーム一覧取得
+      if (url.pathname === '/api/rooms/public' && request.method === 'GET') {
+        return await handleGetPublicRooms(request, env, corsHeaders);
+      }
+
+      // ランダム公開ルーム参加
+      if (url.pathname === '/api/rooms/join-random' && request.method === 'POST') {
+        return await handleJoinRandomRoom(request, env, corsHeaders);
+      }
+
       // ルーム情報取得
       if (url.pathname.startsWith('/api/rooms/') && request.method === 'GET') {
         const roomId = url.pathname.split('/')[3];
@@ -293,4 +303,142 @@ async function handleKickPlayer(
       }
     });
   }
+async function handleGetPublicRooms(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    // KVストレージから公開ルーム一覧を取得
+    const publicRoomsData = await env.PUBLIC_ROOMS.list();
+    const publicRooms = [];
+
+    for (const key of publicRoomsData.keys) {
+      try {
+        const roomId = key.name;
+        const roomObjectId = env.GAME_ROOMS.idFromName(roomId);
+        const roomObject = env.GAME_ROOMS.get(roomObjectId);
+        
+        const getRoomRequest = new Request(`https://dummy.com/api/room`, {
+          method: 'GET'
+        });
+        
+        const response = await roomObject.fetch(getRoomRequest);
+        if (response.ok) {
+          const roomData = await response.json();
+          
+          // 公開ルームで、ロビー状態で、プレイヤー数が10人未満の場合のみ追加
+          if (roomData.success && roomData.gameState?.isPublic && 
+              roomData.gameState?.phase === 'lobby' && 
+              roomData.gameState?.players?.length < 10) {
+            publicRooms.push({
+              roomId: roomId,
+              playerCount: roomData.gameState.players.length,
+              hostName: roomData.gameState.players.find((p: any) => p.isHost)?.name || 'Unknown',
+              createdAt: roomData.gameState.createdAt || Date.now()
+            });
+          }
+        }
+      } catch (error) {
+        // 個別のルーム取得エラーは無視して続行
+        console.log(`Failed to get room ${key.name}:`, error);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      publicRooms: publicRooms.sort((a, b) => b.createdAt - a.createdAt), // 新しい順
+      timestamp: Date.now()
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to get public rooms:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Failed to get public rooms',
+      timestamp: Date.now()
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+}
+
+async function handleJoinRandomRoom(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  try {
+    const body = await request.json() as any;
+    const playerName = body.playerName;
+
+    if (!playerName || typeof playerName !== 'string' || playerName.trim().length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Player name is required',
+        timestamp: Date.now()
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    }
+
+    // 公開ルーム一覧を取得
+    const publicRoomsResponse = await handleGetPublicRooms(request, env, corsHeaders);
+    const publicRoomsData = await publicRoomsResponse.json();
+
+    if (!publicRoomsData.success || publicRoomsData.publicRooms.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'No available public rooms',
+        timestamp: Date.now()
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    }
+
+    // ランダムに部屋を選択
+    const randomIndex = Math.floor(Math.random() * publicRoomsData.publicRooms.length);
+    const selectedRoom = publicRoomsData.publicRooms[randomIndex];
+
+    // 選択された部屋に参加
+    const joinRequest = new Request(`https://dummy.com/api/rooms/${selectedRoom.roomId}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ playerName }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    return await handleJoinRoom(joinRequest, env, selectedRoom.roomId, corsHeaders);
+
+  } catch (error) {
+    console.error('Failed to join random room:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Failed to join random room',
+      timestamp: Date.now()
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        ...corsHeaders
+      }
+    });
+  }
+}
 }

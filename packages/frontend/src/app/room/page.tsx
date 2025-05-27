@@ -55,6 +55,7 @@ interface GameState {
   timeRemaining: number
   votes?: Vote[]
   chatMessages?: ChatMessage[]
+  isPublic?: boolean
 }
 
 export default function RoomPage() {
@@ -424,6 +425,14 @@ export default function RoomPage() {
 
     setSelectedAbilityTarget(finalTargetId)
   }
+const togglePublic = () => {
+    if (ws.current && gameState) {
+      sendMessage({
+        type: 'toggle_public',
+        roomId: gameState.id
+      })
+    }
+  }
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -545,6 +554,12 @@ export default function RoomPage() {
                   className="bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 px-4 py-2 rounded text-sm transition-colors"
                 >
                   AI追加 ({getAIPlayerCount()}/8)
+                </button>
+                <button
+                  onClick={togglePublic}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/30 text-white px-4 py-2 rounded text-sm transition-colors"
+                >
+                  {gameState.isPublic ? '🌐 公開' : '🔒 非公開'}
                 </button>
                 <button
                   onClick={startGame}

@@ -115,6 +115,45 @@ export default function HomePage() {
     }
   }
 
+  const handleJoinRandomRoom = async () => {
+    if (!playerName.trim()) {
+      alert('プレイヤー名を入力してください')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const workersUrl = process.env.NEXT_PUBLIC_WORKERS_URL || 'https://otak-jinro-workers.systemexe-research-and-development.workers.dev'
+      const response = await fetch(`${workersUrl}/api/rooms/join-random`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          playerName: playerName
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        const basePath = process.env.NODE_ENV === 'production' ? '/otak-jinro' : ''
+        window.location.href = `${basePath}/?roomId=${result.data.roomId}&name=${encodeURIComponent(playerName)}`
+      } else {
+        if (result.error === 'No available public rooms') {
+          alert('現在参加可能な公開ルームがありません。新しいルームを作成してください。')
+        } else {
+          alert('ランダム参加に失敗しました: ' + result.error)
+        }
+      }
+    } catch (error) {
+      console.error('Error joining random room:', error)
+      alert('ランダム参加中にエラーが発生しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-8">
@@ -157,6 +196,15 @@ export default function HomePage() {
               className="w-full bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed"
             >
               {isLoading ? '作成中...' : 'ルームを作成'}
+            </button>
+
+            {/* ランダム参加 */}
+            <button
+              onClick={handleJoinRandomRoom}
+              disabled={isLoading || !playerName.trim()}
+              className="w-full bg-white/10 hover:bg-white/20 disabled:bg-white/5 border border-white/20 hover:border-white/30 disabled:border-white/10 text-white disabled:text-gray-400 font-medium py-2 px-4 rounded-md transition-colors disabled:cursor-not-allowed"
+            >
+              {isLoading ? '参加中...' : '公開ルームにランダム参加'}
             </button>
 
             <div className="text-center text-gray-400">または</div>

@@ -106,6 +106,7 @@ export interface GameState {
   lastExecuted?: Player | null;  // 前日の処刑者（霊媒師用）
   voteHistory?: VoteRound[];     // 投票履歴
   gameSettings: GameSettings;
+  isPublic: boolean;             // 公開ルーム設定
   createdAt: number;
   updatedAt: number;
 }
@@ -133,6 +134,15 @@ export interface GameResult {
   };
 }
 
+// Public room info for listing
+export interface PublicRoomInfo {
+  id: string;
+  playerCount: number;
+  maxPlayers: number;
+  phase: GamePhase;
+  createdAt: number;
+}
+
 // WebSocket message types
 export type WebSocketMessage =
   | { type: 'join_room'; roomId: string; player: Omit<Player, 'id' | 'role' | 'joinedAt'> }
@@ -143,11 +153,14 @@ export type WebSocketMessage =
   | { type: 'use_ability'; roomId: string; playerId: string; targetId?: string }
   | { type: 'add_ai_player'; roomId: string }
   | { type: 'kick_player'; roomId: string; playerId: string }
+  | { type: 'toggle_public'; roomId: string; playerId: string }  // 公開/非公開切り替え
+  | { type: 'join_random_room'; player: Omit<Player, 'id' | 'role' | 'joinedAt'> }  // ランダム参加
   | { type: 'player_kicked'; playerId: string; playerName: string; kickedBy: string }
   | { type: 'game_state_update'; gameState: GameState }
   | { type: 'player_joined'; player: Player }
   | { type: 'player_left'; playerId: string }
   | { type: 'ability_used'; message: string }
+  | { type: 'room_visibility_changed'; isPublic: boolean }  // 公開設定変更通知
   | { type: 'divine_result'; message: string }
   | { type: 'medium_result'; message: string }
   | { type: 'vote_result'; message: string }

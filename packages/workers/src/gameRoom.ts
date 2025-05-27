@@ -161,6 +161,7 @@ export class GameRoom implements DurableObject {
               enableSpectators: true,
               customRoles: []
             },
+            isPublic: false,
             createdAt: Date.now(),
             updatedAt: Date.now()
           };
@@ -228,6 +229,9 @@ export class GameRoom implements DurableObject {
       case 'kick_player':
         await this.handleKickPlayer(playerId, message);
         break;
+      case 'toggle_public':
+        await this.handleTogglePublic(playerId, message);
+        break;
     }
   }
 
@@ -252,6 +256,7 @@ export class GameRoom implements DurableObject {
             enableSpectators: true,
             customRoles: []
           },
+          isPublic: false,
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
@@ -736,6 +741,16 @@ export class GameRoom implements DurableObject {
     const winner = checkWinCondition(this.gameState.players);
     if (winner) {
       this.gameState.phase = 'ended';
+      
+      // 公開ルーム一覧から削除（ゲーム終了時）
+      if (this.gameState.isPublic) {
+        try {
+          await this.env.PUBLIC_ROOMS.delete(this.gameState.id);
+          console.log(`ゲーム終了により、ルーム ${this.gameState.id} を公開ルーム一覧から削除しました`);
+        } catch (error) {
+          console.error('ゲーム終了時の公開ルーム一覧削除に失敗:', error);
+        }
+      }
       
       // チーム名を日本語に変換
       const getTeamDisplayName = (team: string) => {
@@ -2161,5 +2176,76 @@ export class GameRoom implements DurableObject {
     });
 
     console.log(`プレイヤー ${targetPlayer.name} (${targetPlayerId}) がホスト ${kicker.name} によってキックされました`);
+  }
+
+  /**
+   * 公開設定切り替え処理
+   */
+  private async handleTogglePublic(playerId: string, message: any) {
+    if (!this.gameState) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ゲーム状態が見つかりません'
+      });
+      return;
+    }
+
+    // ホストのみが公開設定を変更可能
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player || !player.isHost) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ホストのみが公開設定を変更できます'
+      });
+      return;
+    }
+
+    // ゲーム開始後は変更不可
+    if (this.gameState.phase !== 'lobby') {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        message: 'ゲーム開始後は公開設定を変更できません'
+      });
+      return;
+    }
+
+    // 公開設定を切り替え
+    this.gameState.isPublic = !this.gameState.isPublic;
+    this.gameState.updatedAt = Date.now();
+
+    await this.saveGameState();
+
+    // 公開ルーム一覧の管理
+    try {
+      if (this.gameState.isPublic) {
+        // 公開ルーム一覧に追加
+        await this.env.PUBLIC_ROOMS.put(this.gameState.id, JSON.stringify({
+          roomId: this.gameState.id,
+          createdAt: this.gameState.createdAt || Date.now(),
+          updatedAt: Date.now()
+        }));
+        console.log(`ルーム ${this.gameState.id} を公開ルーム一覧に追加しました`);
+      } else {
+        // 公開ルーム一覧から削除
+        await this.env.PUBLIC_ROOMS.delete(this.gameState.id);
+        console.log(`ルーム ${this.gameState.id} を公開ルーム一覧から削除しました`);
+      }
+    } catch (error) {
+      console.error('公開ルーム一覧の更新に失敗:', error);
+    }
+
+    // 全プレイヤーに公開設定変更を通知
+    this.broadcastToAll({
+      type: 'room_visibility_changed',
+      isPublic: this.gameState.isPublic
+    });
+
+    // ゲーム状態も更新
+    this.broadcastToAll({
+      type: 'game_state_update',
+      gameState: this.gameState
+    });
+
+    console.log(`ルーム ${this.gameState.id} の公開設定が ${this.gameState.isPublic ? '公開' : '非公開'} に変更されました`);
   }
 }
