@@ -216,7 +216,18 @@ export default function RoomPage() {
                 // キックされたプレイヤーの通知を表示
                 const kickMessage = `${message.playerName} が ${message.kickedBy} によってキックされました`
                 console.log(kickMessage)
-                // チャットメッセージとして表示
+                
+                // 自分がキックされたかチェック
+                const currentPlayerId = gameState?.players.find(p => p.name === playerName)?.id
+                if (message.playerId === currentPlayerId) {
+                  // 自分がキックされた場合はホーム画面に遷移
+                  console.log('自分がキックされました。ホーム画面に遷移します。')
+                  alert('あなたはルームからキックされました。')
+                  router.push('/')
+                  return
+                }
+                
+                // 他のプレイヤーがキックされた場合はチャットメッセージとして表示
                 if (gameState) {
                   const systemMessage = {
                     id: Date.now().toString(),
@@ -245,6 +256,14 @@ export default function RoomPage() {
           console.log('WebSocket接続終了:', event.code, event.reason)
           setIsConnected(false)
           setIsInitializing(false)
+          
+          // キックによる切断の場合はホーム画面に遷移
+          if (event.code === 1000 && event.reason === 'キックされました') {
+            console.log('キックにより接続が切断されました。ホーム画面に遷移します。')
+            alert('あなたはルームからキックされました。')
+            router.push('/')
+            return
+          }
           
           // 意図的な切断（1000: Normal Closure, 1001: Going Away）でない場合のみ再接続を試行
           if (event.code !== 1000 && event.code !== 1001 && !event.wasClean) {
