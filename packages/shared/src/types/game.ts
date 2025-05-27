@@ -154,6 +154,7 @@ export type WebSocketMessage =
   | { type: 'add_ai_player'; roomId: string }
   | { type: 'kick_player'; roomId: string; playerId: string }
   | { type: 'toggle_public'; roomId: string; playerId: string }  // 公開/非公開切り替え
+  | { type: 'request_player_list_update'; roomId: string }  // プレイヤーリスト更新要求
   | { type: 'join_random_room'; player: Omit<Player, 'id' | 'role' | 'joinedAt'> }  // ランダム参加
   | { type: 'player_kicked'; playerId: string; playerName: string; kickedBy: string }
   | { type: 'game_state_update'; gameState: GameState }

@@ -118,6 +118,7 @@ export default function RoomPage() {
 
   const ws = useRef<WebSocket | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const playerListUpdateTimer = useRef<NodeJS.Timeout | null>(null)
 
   // パラメータ検証
   useEffect(() => {
@@ -283,6 +284,28 @@ export default function RoomPage() {
       }
     }
   }, [roomId, playerName])
+
+  // プレイヤーリストの定期更新
+  useEffect(() => {
+    if (!isConnected || !ws.current) return
+
+    // 30秒ごとにプレイヤーリストの更新を要求
+    playerListUpdateTimer.current = setInterval(() => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: 'request_player_list_update',
+          roomId
+        }))
+      }
+    }, 30000)
+
+    return () => {
+      if (playerListUpdateTimer.current) {
+        clearInterval(playerListUpdateTimer.current)
+        playerListUpdateTimer.current = null
+      }
+    }
+  }, [isConnected, roomId])
 
   // ページ離脱時のクリーンアップ処理
   useEffect(() => {

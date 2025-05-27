@@ -32,11 +32,15 @@ export class GameRoom implements DurableObject {
   private timers: Map<string, any> = new Map();
   private openAIService: OpenAIService | null = null;
   private env: Env;
+  private playerCleanupTimer: any = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
     this.openAIService = createOpenAIService(env);
+    
+    // プレイヤーリストの定期クリーンアップを開始
+    this.startPlayerCleanup();
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -231,6 +235,9 @@ export class GameRoom implements DurableObject {
         break;
       case 'toggle_public':
         await this.handleTogglePublic(playerId, message);
+        break;
+      case 'request_player_list_update':
+        await this.handlePlayerListUpdateRequest(playerId);
         break;
     }
   }
@@ -2247,5 +2254,101 @@ export class GameRoom implements DurableObject {
     });
 
     console.log(`ルーム ${this.gameState.id} の公開設定が ${this.gameState.isPublic ? '公開' : '非公開'} に変更されました`);
+  }
+
+  /**
+   * プレイヤーリスト更新要求を処理
+   */
+  private async handlePlayerListUpdateRequest(playerId: string) {
+    if (!this.gameState) return;
+
+    // 要求したプレイヤーが存在するかチェック
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (!player) return;
+
+    // 切断されたプレイヤーをクリーンアップ
+    this.cleanupDisconnectedPlayers();
+
+    // 最新のゲーム状態を送信
+    this.broadcastGameState();
+  }
+
+  /**
+   * プレイヤーリストの定期クリーンアップを開始
+   */
+  private startPlayerCleanup() {
+    // 30秒ごとにプレイヤーリストをクリーンアップ
+    this.playerCleanupTimer = setInterval(() => {
+      this.cleanupDisconnectedPlayers();
+    }, 30000);
+  }
+
+  /**
+   * 切断されたプレイヤーをクリーンアップ
+   */
+  private cleanupDisconnectedPlayers() {
+    if (!this.gameState) return;
+
+    const beforeCount = this.gameState.players.length;
+    let removedPlayers: Player[] = [];
+
+    // WebSocket接続が切れているプレイヤーを検出
+    this.gameState.players.forEach(player => {
+      const ws = this.websockets.get(player.id);
+      
+      // AIプレイヤーはスキップ
+      if (isAIPlayer(player.name)) return;
+      
+      // WebSocket接続がない、または切断されている場合
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.log(`🧹 [プレイヤークリーンアップ] 切断されたプレイヤーを検出: ${player.name} (${player.id})`);
+        removedPlayers.push(player);
+        
+        // WebSocketマップからも削除
+        if (ws) {
+          this.websockets.delete(player.id);
+        }
+      }
+    });
+
+    // 切断されたプレイヤーを削除
+    if (removedPlayers.length > 0) {
+      this.gameState.players = this.gameState.players.filter(player =>
+        !removedPlayers.some(removed => removed.id === player.id)
+      );
+
+      const afterCount = this.gameState.players.length;
+      console.log(`🧹 [プレイヤークリーンアップ] ${removedPlayers.length}人のプレイヤーを削除 (${beforeCount} → ${afterCount})`);
+
+      // 各削除されたプレイヤーについて通知
+      removedPlayers.forEach(player => {
+        this.broadcastToAll({
+          type: 'player_left',
+          playerId: player.id
+        });
+      });
+
+      // ゲーム状態を保存・更新
+      this.gameState.updatedAt = Date.now();
+      this.saveGameState();
+      this.broadcastGameState();
+    }
+  }
+
+  /**
+   * タイマーのクリーンアップ
+   */
+  private cleanupTimers() {
+    // プレイヤークリーンアップタイマーを停止
+    if (this.playerCleanupTimer) {
+      clearInterval(this.playerCleanupTimer);
+      this.playerCleanupTimer = null;
+    }
+
+    // その他のタイマーもクリーンアップ
+    this.timers.forEach((timer, key) => {
+      clearTimeout(timer);
+    });
+    this.timers.clear();
   }
 }
