@@ -330,14 +330,14 @@ async function handleGetPublicRooms(
           const roomData = await response.json();
           
           // 公開ルームで、ロビー状態で、プレイヤー数が10人未満の場合のみ追加
-          if (roomData.success && roomData.gameState?.isPublic && 
-              roomData.gameState?.phase === 'lobby' && 
-              roomData.gameState?.players?.length < 10) {
+          if (roomData.success && roomData.data?.isPublic &&
+              roomData.data?.phase === 'lobby' &&
+              roomData.data?.players?.length < 10) {
             publicRooms.push({
               roomId: roomId,
-              playerCount: roomData.gameState.players.length,
-              hostName: roomData.gameState.players.find((p: any) => p.isHost)?.name || 'Unknown',
-              createdAt: roomData.gameState.createdAt || Date.now()
+              playerCount: roomData.data.players.length,
+              hostName: roomData.data.players.find((p: any) => p.isHost)?.name || 'Unknown',
+              createdAt: roomData.data.createdAt || Date.now()
             });
           }
         }
@@ -426,7 +426,33 @@ async function handleJoinRandomRoom(
       headers: { 'Content-Type': 'application/json' }
     });
 
-    return await handleJoinRoom(joinRequest, env, selectedRoom.roomId, corsHeaders);
+    const joinResponse = await handleJoinRoom(joinRequest, env, selectedRoom.roomId, corsHeaders);
+    const joinResult = await joinResponse.json();
+
+    // roomIdを含むレスポンスを返す
+    if (joinResult.success) {
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          ...joinResult.data,
+          roomId: selectedRoom.roomId
+        },
+        timestamp: Date.now()
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    } else {
+      return new Response(JSON.stringify(joinResult), {
+        status: joinResponse.status,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      });
+    }
 
   } catch (error) {
     console.error('Failed to join random room:', error);
