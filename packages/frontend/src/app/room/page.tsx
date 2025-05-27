@@ -402,20 +402,27 @@ export default function RoomPage() {
     setSelectedVoteTarget(targetId)
   }
 
-  const handleAbility = (targetId: string) => {
+  const handleAbility = (targetId?: string) => {
     if (!ws.current || !gameState) return
 
     const playerId = gameState.players.find(p => p.name === playerName)?.id
     if (!playerId) return
 
+    const currentPlayer = getCurrentPlayer()
+    
+    // 霊媒師の場合はtargetIdは不要（自動的に処刑者を霊視）
+    const finalTargetId = currentPlayer?.role === 'medium' ? playerId : targetId
+    
+    if (!finalTargetId) return
+
     sendMessage({
       type: 'use_ability',
       roomId: gameState.id,
       playerId,
-      targetId
+      targetId: finalTargetId
     })
 
-    setSelectedAbilityTarget(targetId)
+    setSelectedAbilityTarget(finalTargetId)
   }
 
   const formatTime = (seconds: number) => {
@@ -448,9 +455,9 @@ export default function RoomPage() {
 
   const canUseAbility = () => {
     const currentPlayer = getCurrentPlayer()
-    return gameState?.phase === 'night' && 
-           currentPlayer?.isAlive && 
-           (currentPlayer.role === 'werewolf' || currentPlayer.role === 'seer' || currentPlayer.role === 'hunter')
+    return gameState?.phase === 'night' &&
+           currentPlayer?.isAlive &&
+           (currentPlayer.role === 'werewolf' || currentPlayer.role === 'seer' || currentPlayer.role === 'hunter' || currentPlayer.role === 'medium')
   }
 
   if (isInitializing) {
@@ -723,26 +730,44 @@ export default function RoomPage() {
             {/* 能力使用 */}
             {canUseAbility() && (
               <div className="mb-4">
-                <h4 className="font-medium mb-2">能力使用</h4>
-                <div className="space-y-1">
-                  {gameState.players
-                    .filter(p => {
-                      if (currentPlayer?.role === 'werewolf') {
-                        return p.isAlive && p.id !== currentPlayer?.id && p.role !== 'werewolf'
-                      }
-                      return p.isAlive && p.id !== currentPlayer?.id
-                    })
-                    .map(player => (
-                      <button
-                        key={player.id}
-                        onClick={() => handleAbility(player.id)}
-                        disabled={selectedAbilityTarget === player.id}
-                        className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-white/20 disabled:border-white/30 transition-colors"
-                      >
-                        {player.name} {selectedAbilityTarget === player.id && '✓'}
-                      </button>
-                    ))}
-                </div>
+                <h4 className="font-medium mb-2">
+                  {currentPlayer?.role === 'werewolf' && '襲撃対象を選択'}
+                  {currentPlayer?.role === 'seer' && '占い対象を選択'}
+                  {currentPlayer?.role === 'hunter' && '護衛対象を選択'}
+                  {currentPlayer?.role === 'medium' && '霊媒能力を使用'}
+                </h4>
+                
+                {currentPlayer?.role === 'medium' ? (
+                  // 霊媒師の場合は対象選択不要
+                  <button
+                    onClick={() => handleAbility()}
+                    disabled={!!selectedAbilityTarget}
+                    className="w-full p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-white/20 disabled:border-white/30 transition-colors"
+                  >
+                    処刑者を霊視する {selectedAbilityTarget && '✓'}
+                  </button>
+                ) : (
+                  // その他の役職は対象選択が必要
+                  <div className="space-y-1">
+                    {gameState.players
+                      .filter(p => {
+                        if (currentPlayer?.role === 'werewolf') {
+                          return p.isAlive && p.id !== currentPlayer?.id && p.role !== 'werewolf'
+                        }
+                        return p.isAlive && p.id !== currentPlayer?.id
+                      })
+                      .map(player => (
+                        <button
+                          key={player.id}
+                          onClick={() => handleAbility(player.id)}
+                          disabled={selectedAbilityTarget === player.id}
+                          className="w-full text-left p-2 rounded bg-black/50 backdrop-blur-md border border-white/20 hover:bg-black/60 disabled:bg-white/20 disabled:border-white/30 transition-colors"
+                        >
+                          {player.name} {selectedAbilityTarget === player.id && '✓'}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             )}
 
