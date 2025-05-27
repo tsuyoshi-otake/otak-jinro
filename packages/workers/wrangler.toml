@@ -55,10 +55,3 @@ CORS_ORIGIN = "*"
 # OPENAI_API_KEY is managed via GitHub Actions secrets and wrangler secret commands
 # For local development, use: wrangler secret put OPENAI_API_KEY
 # For production, secrets are automatically set during CI/CD deployment
-
-# Environment-specific secrets
-[env.production.secrets]
-# OPENAI_API_KEY is set via GitHub Actions during deployment
-
-[secrets]
-# OPENAI_API_KEY is set via wrangler secret put command for local development
