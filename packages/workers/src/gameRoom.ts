@@ -742,7 +742,16 @@ export class GameRoom implements DurableObject {
       // ゲーム終了ログ
       console.log(`[ゲーム終了] ${teamDisplayName}の勝利！`);
       
-      // 勝利メッセージを専用メッセージで送信
+      // ゲーム終了メッセージを送信
+      this.broadcastToAll({
+        type: 'game_ended',
+        result: {
+          winner: teamDisplayName,
+          reason: `${teamDisplayName}の勝利です！`
+        }
+      });
+      
+      // 勝利メッセージを専用メッセージでも送信
       const winMessageId = crypto.randomUUID();
       const roleReveal = `📋 役職公開: ${this.gameState.players.map(p =>
         `${p.name}(${p.role === 'villager' ? '村人' :

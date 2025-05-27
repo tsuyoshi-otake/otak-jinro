@@ -208,8 +208,9 @@ export default function RoomPage() {
                 if (message.message && message.messageId !== lastSystemMessageId) {
                   setLastSystemMessageId(message.messageId)
                   
+                  // ゲーム終了メッセージは game_ended で処理するため除外
                   if (message.message.includes('ゲーム終了！')) {
-                    showResultModal('execution', 'ゲーム終了', message.message, message.messageId)
+                    // game_ended メッセージで処理されるため、ここでは何もしない
                   } else if (message.message.includes('が処刑されました')) {
                     showResultModal('execution', '処刑結果', message.message, message.messageId)
                   } else if (message.message.includes('投票が同数')) {

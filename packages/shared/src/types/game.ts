@@ -151,6 +151,7 @@ export type WebSocketMessage =
   | { type: 'divine_result'; message: string }
   | { type: 'medium_result'; message: string }
   | { type: 'system_message'; message: string; messageId: string }
+  | { type: 'game_ended'; result: { winner: string; reason?: string } }
   | { type: 'error'; message: string };
 
 // API response type
