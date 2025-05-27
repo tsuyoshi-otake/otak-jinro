@@ -1861,7 +1861,11 @@ export class GameRoom implements DurableObject {
 
             // 最後のメッセージ時間とメッセージカウンターを更新
             (currentPlayer as any).lastMessageTime = Date.now();
-            (currentPlayer as any).messageCount = ((currentPlayer as any).messageCount || 0) + 1;
+            const oldCount = (currentPlayer as any).messageCount || 0;
+            const newCount = oldCount + 1;
+            (currentPlayer as any).messageCount = newCount;
+            
+            console.log(`[Message Counter Update] ${currentPlayer.name}: ${oldCount} → ${newCount}`);
 
             await this.saveGameState();
 

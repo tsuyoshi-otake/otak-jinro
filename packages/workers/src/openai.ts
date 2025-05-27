@@ -158,12 +158,15 @@ export class OpenAIService {
       
       // 発言の長さを動的に制御（3回に1回は長い発言、他は短い発言）
       const currentPlayer = gameState.players.find((p: any) => p.name === playerName);
-      const messageCount = (currentPlayer?.messageCount || 0) + 1;
-      const isLongMessage = messageCount % 3 === 0; // 3回に1回は長い発言
+      const currentMessageCount = currentPlayer?.messageCount || 0;
+      const nextMessageCount = currentMessageCount + 1;
+      const isLongMessage = nextMessageCount % 3 === 0; // 3回に1回は長い発言
       const maxTokens = isLongMessage ? 100 : 50;
       const lengthInstruction = isLongMessage ?
         '2-3文で詳しく' :
         '1文で簡潔に';
+      
+      console.log(`[AI Length Control] ${playerName}: messageCount=${currentMessageCount} → ${nextMessageCount}, isLong=${isLongMessage}, maxTokens=${maxTokens}`);
 
       const requestBody = {
         model: this.model,
