@@ -524,16 +524,37 @@ export default function RoomPage() {
 
     const currentPlayer = getCurrentPlayer()
     
-    // 霊媒師の場合はtargetIdは不要（自動的に処刑者を霊視）
-    const finalTargetId = currentPlayer?.role === 'medium' ? playerId : targetId
+    // 役職に応じて能力タイプを決定
+    let ability: string
+    switch (currentPlayer?.role) {
+      case 'werewolf':
+        ability = 'attack'
+        break
+      case 'seer':
+        ability = 'divine'
+        break
+      case 'hunter':
+        ability = 'guard'
+        break
+      case 'medium':
+        ability = 'divine'
+        // 霊媒師の場合はtargetIdは不要（自動的に処刑者を霊視）
+        targetId = playerId
+        break
+      default:
+        console.error('Unknown role for ability:', currentPlayer?.role)
+        return
+    }
     
+    const finalTargetId = targetId
     if (!finalTargetId) return
 
     sendMessage({
       type: 'use_ability',
       roomId: gameState.id,
       playerId,
-      targetId: finalTargetId
+      targetId: finalTargetId,
+      ability
     })
 
     setSelectedAbilityTarget(finalTargetId)

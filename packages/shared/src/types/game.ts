@@ -150,7 +150,7 @@ export type WebSocketMessage =
   | { type: 'start_game'; roomId: string }
   | { type: 'vote'; roomId: string; vote: Omit<Vote, 'timestamp'> }
   | { type: 'chat'; roomId: string; message: Omit<ChatMessage, 'id' | 'timestamp'>; isAI?: boolean; aiPlayerId?: string }
-  | { type: 'use_ability'; roomId: string; playerId: string; targetId?: string }
+  | { type: 'use_ability'; roomId: string; playerId: string; targetId?: string; ability?: string }
   | { type: 'add_ai_player'; roomId: string }
   | { type: 'kick_player'; roomId: string; playerId: string }
   | { type: 'toggle_public'; roomId: string; playerId: string }  // 公開/非公開切り替え
