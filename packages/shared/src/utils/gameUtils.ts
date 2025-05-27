@@ -32,19 +32,22 @@ function getDefaultRoles(playerCount: number): PlayerRole[] {
     throw new Error('Minimum 4 players required');
   }
   
-  // Determine werewolf count (about 1/3 of players)
-  const werewolfCount = Math.floor(playerCount / 3);
+  // Essential roles that must always appear
+  roles.push('werewolf');  // 必ず人狼1人
+  roles.push('seer');      // 必ず占い師1人
   
-  // Add werewolves
-  for (let i = 0; i < werewolfCount; i++) {
+  // Add additional werewolves based on player count (about 1/3 total)
+  const targetWerewolfCount = Math.max(1, Math.floor(playerCount / 3));
+  const additionalWerewolves = targetWerewolfCount - 1; // -1 because we already added 1
+  
+  for (let i = 0; i < additionalWerewolves; i++) {
     roles.push('werewolf');
   }
   
-  // Add special roles
-  if (playerCount >= 5) roles.push('seer');      // Seer
-  if (playerCount >= 6) roles.push('medium');    // Medium
-  if (playerCount >= 7) roles.push('hunter');    // Hunter
-  if (playerCount >= 8) roles.push('madman');    // Madman
+  // Add other special roles based on player count
+  if (playerCount >= 5) roles.push('medium');    // 霊媒師
+  if (playerCount >= 6) roles.push('hunter');    // 狩人
+  if (playerCount >= 7) roles.push('madman');    // 狂人
   
   // Fill remaining with villagers
   const remainingCount = playerCount - roles.length;

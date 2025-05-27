@@ -58,12 +58,14 @@ describe('gameUtils', () => {
       expect(result).toHaveLength(4);
       expect(result.every(p => p.role)).toBe(true);
       
-      // 4人の場合: 人狼1, 村人3
+      // 4人の場合: 人狼1, 占い師1, 村人2
       const werewolves = result.filter(p => p.role === 'werewolf');
+      const seers = result.filter(p => p.role === 'seer');
       const villagers = result.filter(p => p.role === 'villager');
       
       expect(werewolves).toHaveLength(1);
-      expect(villagers).toHaveLength(3);
+      expect(seers).toHaveLength(1);
+      expect(villagers).toHaveLength(2);
     });
 
     it('8人プレイヤーに正しく役職を割り当てる', () => {
