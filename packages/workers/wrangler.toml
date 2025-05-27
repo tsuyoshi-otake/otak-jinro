@@ -16,7 +16,7 @@ id = "9e01ad23ddb04f289d0614e8a4a018f8"
 
 [[env.production.kv_namespaces]]
 binding = "PUBLIC_ROOMS"
-id = "public_rooms_namespace_id"
+id = "a8b9e985ecf0492383243111fbc7ba88"
 
 [env.staging]
 name = "otak-jinro-workers-staging"
@@ -39,8 +39,8 @@ preview_id = "d71e2801a36f4359b196277a2990cf96"
 
 [[kv_namespaces]]
 binding = "PUBLIC_ROOMS"
-id = "public_rooms_namespace_id"
-preview_id = "public_rooms_preview_id"
+id = "a8b9e985ecf0492383243111fbc7ba88"
+preview_id = "90027e63b5e643a4a6235cb691546efa"
 
 # Environment Variables
 [vars]
