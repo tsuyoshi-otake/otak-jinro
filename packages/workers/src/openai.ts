@@ -161,15 +161,17 @@ export class OpenAIService {
         messages: [
           {
             role: 'system',
-            content: `あなたは人狼ゲームのプレイヤーです。以下の重要なルールに従ってください：
+            content: `あなたは人狼ゲームの世界の住民です。以下の重要なルールに従ってください：
 
-1. 必ず他のプレイヤーの最近の発言に言及し、それに対する反応や意見を述べてください
-2. 具体的なプレイヤー名を挙げて、その人の発言や行動について言及してください
-3. 自分の役職と個性に基づいた戦略的な発言をしてください
-4. 会話の流れを無視した一般的な発言は避けてください
-5. 1-3文の簡潔で意味のある発言をしてください
+1. 必ず1文以内の短い発言をしてください
+2. 簡潔で自然な日本語を使ってください
+3. 自分の陣営に応じた感情を表現してください：
+   - 村人陣営：死への恐怖、仲間を失う悲しみ、人狼への怒りを表現
+   - 人狼陣営：狩りの興奮、村人を騙す楽しさ、殺戮への満足感を内に秘める
+4. 他のプレイヤーの名前を挙げる場合は1人だけにしてください
+5. 人狼ゲームの緊張感のある雰囲気を演出してください
 
-重要：全会話履歴を読み、最新の話題や議論に参加してください。`
+重要：短く、感情豊かで、ゲーム世界に没入した発言をしてください。`
           },
           {
             role: 'user',
@@ -179,8 +181,8 @@ export class OpenAIService {
         response_format: {
           type: 'text'
         },
-        temperature: 1,
-        max_completion_tokens: 2048,
+        temperature: 0.7,
+        max_completion_tokens: 50,
         top_p: 1,
         frequency_penalty: 0,
         presence_penalty: 0
@@ -310,9 +312,9 @@ export class OpenAIService {
       return null;
     }
 
-    // 発言頻度の制御 - 最低5秒間隔（頻度向上）
+    // 発言頻度の制御 - 最低15秒間隔（頻度調整）
     const timeSinceLastMessage = Date.now() - (player.lastMessageTime || 0);
-    const minInterval = 5000; // 5秒
+    const minInterval = 15000; // 15秒
 
     if (timeSinceLastMessage < minInterval) {
       console.log(`[OpenAI] ${player.name} spoke too recently (${timeSinceLastMessage}ms ago), skipping`);
@@ -398,23 +400,25 @@ export class OpenAIService {
     // フェーズに応じた文脈的な発言
     const contextualResponses: { [key: string]: string[] } = {
       day: [
-        `${randomPlayer}さんの意見はどうですか？`,
-        `${randomPlayer}さん、昨夜は何か気づいたことはありますか？`,
-        `私は${randomPlayer}さんの行動が気になります。`,
-        `${randomPlayer}さんの発言について、みなさんはどう思いますか？`,
-        `${randomPlayer}さんを信じていいのでしょうか？`
+        `${randomPlayer}さん、怪しくないですか？`,
+        `${randomPlayer}さんが人狼かもしれません...`,
+        `${randomPlayer}さんの行動が不自然です。`,
+        `${randomPlayer}さんを疑っています。`,
+        `${randomPlayer}さん、本当に村人ですか？`
       ],
       voting: [
-        `${randomPlayer}さんに投票しようと思いますが、どうでしょう？`,
-        `${randomPlayer}さんの弁明を聞きたいです。`,
-        `私は${randomPlayer}さんが怪しいと思います。`,
-        `${randomPlayer}さんか、それとも他の誰かか...`,
-        `${randomPlayer}さんについて、もう一度考えてみましょう。`
+        `${randomPlayer}さんに投票します。`,
+        `${randomPlayer}さんが人狼だと思います。`,
+        `${randomPlayer}さんを処刑しましょう。`,
+        `${randomPlayer}さんは危険です。`,
+        `${randomPlayer}さんを信じられません。`
       ],
       night: [
-        '静かな夜ですね...',
-        '朝が待ち遠しいです。',
-        '誰が襲われるか心配です。'
+        '恐ろしい夜です...',
+        '誰が殺されるのでしょうか...',
+        '朝まで生きていられるでしょうか...',
+        '人狼が近くにいる気がします...',
+        '怖くて眠れません...'
       ]
     };
 
@@ -592,26 +596,28 @@ ${currentVotes || '（まだ投票がありません）'}
     // 役職別のバイアス
     switch (role) {
       case 'werewolf':
-        biases.push('- 村人チームの信頼を得ることを最優先とする');
-        biases.push('- 真の占い師や霊媒師を特定し、無力化を図る');
-        biases.push('- 仲間の人狼を露骨にかばわない');
+        biases.push('- 村人を騙すことに快感を覚え、巧妙に信頼を得る');
+        biases.push('- 真の占い師や霊媒師を見つけ出し、密かに排除を企む');
+        biases.push('- 仲間の人狼とは表面上距離を置き、内心では連携を図る');
+        biases.push('- 村人の恐怖や混乱を楽しみながら、冷静を装う');
         break;
       case 'seer':
-        biases.push('- 人狼を見つけたら積極的に告発するか、慎重に立ち回るかを判断');
-        biases.push('- 偽占い師に対抗する際は論理的な証拠を示す');
-        biases.push('- 必要に応じて結果を隠すことも検討');
+        biases.push('- 人狼を見つけた時の恐怖と使命感に駆られる');
+        biases.push('- 自分が狙われる恐怖を感じながらも村を守ろうとする');
+        biases.push('- 偽占い師に対抗する際は恐怖に震えながらも論理的な証拠を示す');
+        biases.push('- 自分が狙われる恐怖から結果を隠すことも検討');
         break;
       case 'medium':
-        biases.push('- 処刑された人の正体情報を戦略的に活用');
-        biases.push('- 偽霊媒師の発言と照らし合わせて矛盾を指摘');
+        biases.push('- 死者の声を聞く重責と恐怖を感じながら情報を活用');
+        biases.push('- 偽霊媒師への怒りと恐怖を込めて矛盾を指摘');
         break;
       case 'hunter':
-        biases.push('- 正体を隠しつつ人狼を探す');
-        biases.push('- 処刑されそうになったら能力を明かすことを検討');
+        biases.push('- 村人を守る使命感と失敗への恐怖に駆られながら人狼を探す');
+        biases.push('- 処刑の恐怖に怯えながらも最後の手段として能力を明かす');
         break;
       case 'villager':
-        biases.push('- 時として占い師や霊媒師を騙ることで場を混乱させる戦術も有効');
-        biases.push('- 真の能力者を守るために注意を引く役割を果たす');
+        biases.push('- 無力感と死への恐怖に怯えながらも必死に推理する');
+        biases.push('- 仲間の死に悲しみ、人狼への怒りを燃やしながら村を守る');
         break;
     }
 
@@ -659,7 +665,7 @@ ${currentVotes || '（まだ投票がありません）'}
    */
   private calculateSpeakProbability(player: any, gameState: any): number {
     const personality = player.aiPersonality;
-    let probability = 0.6; // ベース確率を0.3から0.6に向上
+    let probability = 0.3; // ベース確率を0.6から0.3に下げて頻度調整
 
     // 性格タイプによる調整
     if (personality.personality === 'aggressive' || personality.personality === 'charismatic') {
@@ -687,7 +693,7 @@ ${currentVotes || '（まだ投票がありません）'}
 
     // 昼フェーズでは発言確率が高い
     if (gameState.phase === 'day') {
-      probability += 0.3; // 0.2から0.3に向上
+      probability += 0.15; // 0.3から0.15に下げて頻度調整
     }
 
     // 投票フェーズでは発言確率が低い

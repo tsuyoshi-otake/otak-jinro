@@ -1027,8 +1027,8 @@ export class GameRoom implements DurableObject {
   private scheduleAIChat(aiPlayer: Player) {
     if (!this.gameState || this.gameState.phase === 'ended') return;
     
-    // 15-45秒のランダムな間隔（より頻繁に）
-    const delay = Math.floor(Math.random() * 30000) + 15000;
+    // 30-60秒のランダムな間隔（頻度調整）
+    const delay = Math.floor(Math.random() * 30000) + 30000;
     
     setTimeout(() => {
       if (!this.gameState || this.gameState.phase === 'ended' || !aiPlayer.isAlive) return;
@@ -1415,8 +1415,8 @@ export class GameRoom implements DurableObject {
 
     // 各AIプレイヤーに対して投票をスケジュール
     aiPlayers.forEach((aiPlayer, index) => {
-      // 5-15秒後にランダムに投票
-      const delay = 5000 + Math.random() * 10000 + (index * 2000);
+      // 10-20秒後にランダムに投票
+      const delay = 10000 + Math.random() * 10000 + (index * 3000);
       
       setTimeout(() => {
         if (!this.gameState || this.gameState.phase !== 'voting') return;
@@ -1512,8 +1512,8 @@ export class GameRoom implements DurableObject {
     nightActors.forEach(p => console.log(`  - ${p.name} (${p.role})`));
 
     nightActors.forEach((aiPlayer, index) => {
-      // 3-10秒後にランダムに行動
-      const delay = 3000 + Math.random() * 7000 + (index * 1500);
+      // 5-15秒後にランダムに行動
+      const delay = 5000 + Math.random() * 10000 + (index * 2000);
       
       setTimeout(() => {
         if (!this.gameState || this.gameState.phase !== 'night') return;
@@ -1772,9 +1772,9 @@ export class GameRoom implements DurableObject {
    * 個別AIプレイヤーの発言スケジュール
    */
   private scheduleIndividualAIMessage(aiPlayer: Player, index: number) {
-    // 5-15秒のランダム間隔 + 初期遅延でずらす（発言頻度向上）
-    const getRandomInterval = () => Math.floor(Math.random() * 10000) + 5000; // 5-15秒
-    const initialDelay = index * 2000; // 各AIプレイヤーを2秒ずつずらす
+    // 20-40秒のランダム間隔 + 初期遅延でずらす（発言頻度調整）
+    const getRandomInterval = () => Math.floor(Math.random() * 20000) + 20000; // 20-40秒
+    const initialDelay = index * 3000; // 各AIプレイヤーを3秒ずつずらす
 
     const scheduleNext = () => {
       const interval = getRandomInterval();
