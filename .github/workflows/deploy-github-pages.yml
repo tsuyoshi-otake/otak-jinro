@@ -44,6 +44,10 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
+      - name: Wait for deployment to stabilize
+        if: github.ref == 'refs/heads/main'
+        run: sleep 10
+
       - name: Set Cloudflare Workers Secrets
         if: github.ref == 'refs/heads/main'
         run: |
@@ -52,6 +56,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Complete Job
+        if: github.ref == 'refs/heads/main'
+        run: echo "Cloudflare Workers deployment and secret configuration completed successfully"
 
   build-frontend:
     runs-on: ubuntu-latest
