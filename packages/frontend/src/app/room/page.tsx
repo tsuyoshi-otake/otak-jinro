@@ -77,8 +77,6 @@ export default function RoomPage() {
   const [delayedError, setDelayedError] = useState<string | null>(null)
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null)
   const [selectedAbilityTarget, setSelectedAbilityTarget] = useState<string | null>(null)
-  const [divineResult, setDivineResult] = useState<string | null>(null)
-  const [mediumResult, setMediumResult] = useState<string | null>(null)
   const [gameEndResult, setGameEndResult] = useState<any>(null)
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [resultModal, setResultModal] = useState<{
@@ -184,25 +182,8 @@ export default function RoomPage() {
                   setChatMessages(prev => [...prev, message.message])
                 }
                 break
-              case 'divine_result':
-                setDivineResult(message.message)
-                showResultModal('ability', '占い結果', message.message, `divine_${Date.now()}`)
-                break
-              case 'medium_result':
-                setMediumResult(message.message)
-                showResultModal('ability', '霊視結果', message.message, `medium_${Date.now()}`)
-                break
-              case 'vote_result':
-                showResultModal('vote', '投票結果', message.message || '投票が完了しました', `vote_${Date.now()}`)
-                break
-              case 'execution_result':
-                showResultModal('execution', '処刑結果', message.message || '処刑が実行されました', `execution_${Date.now()}`)
-                break
-              case 'phase_change':
-                if (message.phase === 'night' && message.deathMessage) {
-                  showResultModal('death', '夜の結果', message.deathMessage, `death_${Date.now()}`)
-                }
-                break
+              // 以下の個別メッセージタイプは system_message に統合されたため削除
+              // divine_result, medium_result, vote_result, execution_result, phase_change
               case 'system_message':
                 // システムメッセージ専用の処理（重複防止）
                 if (message.message && message.messageId !== lastSystemMessageId) {
@@ -216,6 +197,12 @@ export default function RoomPage() {
                   } else if (message.message.includes('投票が同数')) {
                     showResultModal('vote', '投票結果', message.message, message.messageId)
                   } else if (message.message.includes('が襲撃されました') || message.message.includes('が死亡しました')) {
+                    showResultModal('death', '夜の結果', message.message, message.messageId)
+                  } else if (message.message.includes('占い結果:')) {
+                    showResultModal('ability', '占い結果', message.message.replace('占い結果: ', ''), message.messageId)
+                  } else if (message.message.includes('霊媒結果:')) {
+                    showResultModal('ability', '霊媒結果', message.message.replace('霊媒結果: ', ''), message.messageId)
+                  } else if (message.message.includes('昨夜は平和でした')) {
                     showResultModal('death', '夜の結果', message.message, message.messageId)
                   }
                 }
@@ -782,32 +769,7 @@ export default function RoomPage() {
               </div>
             )}
 
-            {/* 結果表示 */}
-            {divineResult && (
-              <div className="mb-4 p-3 bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded">
-                <h4 className="font-medium mb-1">占い結果</h4>
-                <p className="text-sm">{divineResult}</p>
-                <button
-                  onClick={() => setDivineResult(null)}
-                  className="text-xs text-blue-300 mt-1"
-                >
-                  閉じる
-                </button>
-              </div>
-            )}
-
-            {mediumResult && (
-              <div className="mb-4 p-3 bg-purple-500/20 backdrop-blur-sm border border-purple-400/30 rounded">
-                <h4 className="font-medium mb-1">霊媒結果</h4>
-                <p className="text-sm">{mediumResult}</p>
-                <button
-                  onClick={() => setMediumResult(null)}
-                  className="text-xs text-purple-300 mt-1"
-                >
-                  閉じる
-                </button>
-              </div>
-            )}
+            {/* 結果表示は結果モーダルで統一表示されるため削除 */}
           </div>
         </div>
 

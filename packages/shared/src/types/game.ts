@@ -150,6 +150,9 @@ export type WebSocketMessage =
   | { type: 'ability_used'; message: string }
   | { type: 'divine_result'; message: string }
   | { type: 'medium_result'; message: string }
+  | { type: 'vote_result'; message: string }
+  | { type: 'execution_result'; message: string }
+  | { type: 'phase_change'; phase: string; deathMessage?: string }
   | { type: 'system_message'; message: string; messageId: string }
   | { type: 'game_ended'; result: { winner: string; reason?: string } }
   | { type: 'error'; message: string };

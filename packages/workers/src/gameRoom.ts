@@ -552,9 +552,12 @@ export class GameRoom implements DurableObject {
               });
             }
             
+            // 占い結果を専用メッセージで送信
+            const divineMessageId = crypto.randomUUID();
             this.sendToPlayer(playerId, {
-              type: 'divine_result',
-              message: `${target.name}は${result}`
+              type: 'system_message',
+              message: `占い結果: ${target.name}は${result}`,
+              messageId: divineMessageId
             });
           }
         }
@@ -604,9 +607,12 @@ export class GameRoom implements DurableObject {
               });
             }
             
+            // 霊媒結果を専用メッセージで送信
+            const mediumMessageId = crypto.randomUUID();
             this.sendToPlayer(playerId, {
-              type: 'medium_result',
-              message: `${executed.name}は${result}`
+              type: 'system_message',
+              message: `霊媒結果: ${executed.name}は${result}`,
+              messageId: mediumMessageId
             });
           } else {
             // 処刑者がいない場合も記録
@@ -622,9 +628,12 @@ export class GameRoom implements DurableObject {
               });
             }
             
+            // 処刑者なしの結果を専用メッセージで送信
+            const noExecutionMessageId = crypto.randomUUID();
             this.sendToPlayer(playerId, {
-              type: 'medium_result',
-              message: '昨日は処刑者がいませんでした'
+              type: 'system_message',
+              message: '霊媒結果: 昨日は処刑者がいませんでした',
+              messageId: noExecutionMessageId
             });
           }
         }
@@ -912,9 +921,12 @@ export class GameRoom implements DurableObject {
             timestamp: Date.now()
           });
           
+          // 霊媒結果を専用メッセージで送信
+          const nightMediumMessageId = crypto.randomUUID();
           this.sendToPlayer(medium.id, {
-            type: 'medium_result',
-            message: `${executed.name}は${result}`
+            type: 'system_message',
+            message: `霊媒結果: ${executed.name}は${result}`,
+            messageId: nightMediumMessageId
           });
         });
       }
