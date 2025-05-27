@@ -303,6 +303,8 @@ async function handleKickPlayer(
       }
     });
   }
+}
+
 async function handleGetPublicRooms(
   request: Request,
   env: Env,
@@ -430,7 +432,7 @@ async function handleJoinRandomRoom(
     console.error('Failed to join random room:', error);
     return new Response(JSON.stringify({
       success: false,
-      error: 'Failed to join random room',
+      error: 'No available public rooms',
       timestamp: Date.now()
     }), {
       status: 500,
@@ -440,5 +442,4 @@ async function handleJoinRandomRoom(
       }
     });
   }
-}
 }
