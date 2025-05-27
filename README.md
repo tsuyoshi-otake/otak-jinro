@@ -27,6 +27,7 @@ otak-jinroは、Next.jsフロントエンドとCloudflare Workersバックエン
 - **型安全**: TypeScriptによる堅牢な開発
 - **モノレポ**: Turboによる効率的な開発環境
 - **AI プレイヤー**: OpenAI APIを使用した自動プレイヤー
+- **IPブロック機能**: キックされたプレイヤーの自動IP遮断
 
 ## 技術スタック
 

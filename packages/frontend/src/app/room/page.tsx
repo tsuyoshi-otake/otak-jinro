@@ -217,13 +217,22 @@ export default function RoomPage() {
                 const kickMessage = `${message.playerName} が ${message.kickedBy} によってキックされました`
                 console.log(kickMessage)
                 
-                // 自分がキックされたかチェック
-                const currentPlayerId = gameState?.players.find(p => p.name === playerName)?.id
-                if (message.playerId === currentPlayerId) {
+                // 自分がキックされたかチェック（プレイヤー名で比較）
+                if (message.playerName === playerName) {
                   // 自分がキックされた場合はホーム画面に遷移
                   console.log('自分がキックされました。ホーム画面に遷移します。')
-                  alert('あなたはルームからキックされました。')
-                  router.push('/')
+                  
+                  // WebSocket接続を即座に切断
+                  if (ws.current) {
+                    ws.current.close()
+                  }
+                  
+                  // アラートを表示してからホームに遷移
+                  setTimeout(() => {
+                    alert('あなたはルームからキックされました。')
+                    const homeUrl = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+                    window.location.href = homeUrl
+                  }, 100)
                   return
                 }
                 
@@ -260,8 +269,11 @@ export default function RoomPage() {
           // キックによる切断の場合はホーム画面に遷移
           if (event.code === 1000 && event.reason === 'キックされました') {
             console.log('キックにより接続が切断されました。ホーム画面に遷移します。')
-            alert('あなたはルームからキックされました。')
-            router.push('/')
+            // player_kickedメッセージで既に処理されているが、念のためバックアップ処理
+            setTimeout(() => {
+              const homeUrl = window.location.origin + (process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '/')
+              window.location.href = homeUrl
+            }, 500)
             return
           }
           

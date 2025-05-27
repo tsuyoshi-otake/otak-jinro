@@ -29,6 +29,8 @@ export class GameRoom implements DurableObject {
   private state: DurableObjectState;
   private gameState: GameState | null = null;
   private websockets: Map<string, CloudflareWebSocket> = new Map();
+  private playerIPs: Map<string, string> = new Map(); // playerId -> IPアドレス
+  private blockedIPs: Set<string> = new Set(); // ブロックされたIPアドレス
   private timers: Map<string, any> = new Map();
   private openAIService: OpenAIService | null = null;
   private env: Env;
@@ -39,8 +41,60 @@ export class GameRoom implements DurableObject {
     this.env = env;
     this.openAIService = createOpenAIService(env);
     
+    // ブロックリストを永続化ストレージから読み込み
+    this.loadBlockedIPs();
+    
     // プレイヤーリストの定期クリーンアップを開始
     this.startPlayerCleanup();
+  }
+
+  /**
+   * クライアントのIPアドレスを取得
+   */
+  private getClientIP(request: Request): string {
+    // CloudflareのヘッダーからクライアントのIPアドレスを取得
+    return request.headers.get('CF-Connecting-IP') ||
+           request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+           request.headers.get('X-Real-IP') ||
+           'unknown';
+  }
+
+  /**
+   * ブロックされたIPアドレスを永続化ストレージから読み込み
+   */
+  private async loadBlockedIPs() {
+    try {
+      const blockedIPsData = await this.state.storage.get('blockedIPs');
+      if (blockedIPsData) {
+        this.blockedIPs = new Set(blockedIPsData as string[]);
+        console.log(`Loaded ${this.blockedIPs.size} blocked IPs`);
+      }
+    } catch (error) {
+      console.error('Error loading blocked IPs:', error);
+    }
+  }
+
+  /**
+   * ブロックされたIPアドレスを永続化ストレージに保存
+   */
+  private async saveBlockedIPs() {
+    try {
+      await this.state.storage.put('blockedIPs', Array.from(this.blockedIPs));
+      console.log(`Saved ${this.blockedIPs.size} blocked IPs`);
+    } catch (error) {
+      console.error('Error saving blocked IPs:', error);
+    }
+  }
+
+  /**
+   * IPアドレスをブロックリストに追加
+   */
+  private async blockIP(ipAddress: string) {
+    if (ipAddress && ipAddress !== 'unknown') {
+      this.blockedIPs.add(ipAddress);
+      await this.saveBlockedIPs();
+      console.log(`Blocked IP: ${ipAddress}`);
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -63,12 +117,22 @@ export class GameRoom implements DurableObject {
       return new Response('Expected websocket', { status: 400 });
     }
 
+    // IPアドレスを取得
+    const clientIP = this.getClientIP(request);
+    
+    // ブロックされたIPアドレスからの接続を拒否
+    if (this.blockedIPs.has(clientIP)) {
+      console.log(`Blocked IP ${clientIP} attempted to connect`);
+      return new Response('Access denied', { status: 403 });
+    }
+
     const [client, server] = Object.values(new WebSocketPair()) as [CloudflareWebSocket, CloudflareWebSocket];
     
     server.accept();
     
     const playerId = crypto.randomUUID();
     this.websockets.set(playerId, server);
+    this.playerIPs.set(playerId, clientIP);
     
     server.addEventListener('message', async (event: MessageEvent) => {
       try {
@@ -87,6 +151,7 @@ export class GameRoom implements DurableObject {
     
     server.addEventListener('close', () => {
       this.websockets.delete(playerId);
+      this.playerIPs.delete(playerId);
       if (this.gameState) {
         this.removePlayer(playerId);
       }
@@ -118,6 +183,17 @@ export class GameRoom implements DurableObject {
 
   private async handleRoomAPI(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    
+    // IPアドレスを取得してブロックチェック
+    const clientIP = this.getClientIP(request);
+    if (this.blockedIPs.has(clientIP)) {
+      console.log(`Blocked IP ${clientIP} attempted to access API`);
+      return Response.json({
+        success: false,
+        error: 'Access denied',
+        timestamp: Date.now()
+      }, { status: 403 });
+    }
     
     if (request.method === 'GET') {
       return Response.json({
@@ -2153,6 +2229,13 @@ export class GameRoom implements DurableObject {
       return;
     }
 
+    // キックされたプレイヤーのIPアドレスをブロックリストに追加
+    const targetIP = this.playerIPs.get(targetPlayerId);
+    if (targetIP && !isAIPlayer(targetPlayer.name)) {
+      await this.blockIP(targetIP);
+      console.log(`Blocked IP ${targetIP} for kicked player ${targetPlayer.name}`);
+    }
+
     // プレイヤーを削除
     this.gameState.players = this.gameState.players.filter(p => p.id !== targetPlayerId);
 
@@ -2166,6 +2249,9 @@ export class GameRoom implements DurableObject {
       }
       this.websockets.delete(targetPlayerId);
     }
+
+    // プレイヤーIPマップからも削除
+    this.playerIPs.delete(targetPlayerId);
 
     await this.saveGameState();
 
