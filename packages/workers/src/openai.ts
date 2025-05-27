@@ -163,15 +163,15 @@ export class OpenAIService {
             role: 'system',
             content: `あなたは人狼ゲームの世界の住民です。以下の重要なルールに従ってください：
 
-1. 必ず1文以内の短い発言をしてください
-2. 簡潔で自然な日本語を使ってください
+1. 最新の会話履歴を必ず読み、直前の発言に反応してください
+2. 1-2文の短い発言で、自然な会話の流れを作ってください
 3. 自分の陣営に応じた感情を表現してください：
    - 村人陣営：死への恐怖、仲間を失う悲しみ、人狼への怒りを表現
    - 人狼陣営：狩りの興奮、村人を騙す楽しさ、殺戮への満足感を内に秘める
-4. 他のプレイヤーの名前を挙げる場合は1人だけにしてください
+4. 他のプレイヤーの発言に具体的に言及し、会話を続けてください
 5. 人狼ゲームの緊張感のある雰囲気を演出してください
 
-重要：短く、感情豊かで、ゲーム世界に没入した発言をしてください。`
+重要：会話の文脈を理解し、自然で感情豊かな発言をしてください。`
           },
           {
             role: 'user',
@@ -182,7 +182,7 @@ export class OpenAIService {
           type: 'text'
         },
         temperature: 0.7,
-        max_completion_tokens: 50,
+        max_completion_tokens: 100,
         top_p: 1,
         frequency_penalty: 0,
         presence_penalty: 0
@@ -448,8 +448,9 @@ export class OpenAIService {
       voteHistoryRounds: gameState.voteHistory?.length || 0
     });
     
-    // 全会話履歴を取得
-    const allMessages = (gameState.chatMessages || [])
+    // 最新の会話履歴を取得（最新10件に制限して文脈を保持）
+    const recentMessages = (gameState.chatMessages || [])
+      .slice(-10) // 最新10件のメッセージのみ
       .map((msg: any) => `[${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'}) : '時刻不明'}] ${msg.playerName}: ${msg.content}`)
       .join('\n');
 
@@ -502,8 +503,8 @@ ${strategicBias}
 - 生存者: ${gameState.players.filter((p: any) => p.isAlive).map((p: any) => p.name).join(', ')}
 - 死亡者: ${deathInfo || 'なし'}
 
-【全会話履歴】
-${allMessages || '（まだ発言がありません）'}
+【最新会話履歴（最新10件）】
+${recentMessages || '（まだ発言がありません）'}
 
 【投票履歴】
 ${voteHistory || '（まだ投票履歴がありません）'}
