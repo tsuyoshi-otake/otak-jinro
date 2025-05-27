@@ -9,8 +9,8 @@ const nextConfig = {
   basePath: process.env.NODE_ENV === 'production' ? '/otak-jinro' : '',
   assetPrefix: process.env.NODE_ENV === 'production' ? '/otak-jinro/' : '',
   env: {
-    NEXT_PUBLIC_WORKERS_URL: process.env.NEXT_PUBLIC_WORKERS_URL || 'https://otak-jinro-workers.tsuyoshi-otake.workers.dev',
-    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'wss://otak-jinro-workers.tsuyoshi-otake.workers.dev',
+    NEXT_PUBLIC_WORKERS_URL: process.env.NEXT_PUBLIC_WORKERS_URL || 'https://otak-jinro-workers.systemexe-research-and-development.workers.dev',
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'wss://otak-jinro-workers.systemexe-research-and-development.workers.dev',
   },
   // 静的エクスポートでは rewrites は使用できないため削除
   webpack: (config) => {
