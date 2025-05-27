@@ -1772,9 +1772,9 @@ export class GameRoom implements DurableObject {
    * 個別AIプレイヤーの発言スケジュール
    */
   private scheduleIndividualAIMessage(aiPlayer: Player, index: number) {
-    // 10-25秒のランダム間隔 + 初期遅延でずらす
-    const getRandomInterval = () => Math.floor(Math.random() * 15000) + 10000; // 10-25秒
-    const initialDelay = index * 3000; // 各AIプレイヤーを3秒ずつずらす
+    // 5-15秒のランダム間隔 + 初期遅延でずらす（発言頻度向上）
+    const getRandomInterval = () => Math.floor(Math.random() * 10000) + 5000; // 5-15秒
+    const initialDelay = index * 2000; // 各AIプレイヤーを2秒ずつずらす
 
     const scheduleNext = () => {
       const interval = getRandomInterval();

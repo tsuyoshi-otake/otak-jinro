@@ -45,8 +45,8 @@ jobs:
           cd packages/frontend
           npm run build:github
         env:
-          NEXT_PUBLIC_WORKERS_URL: https://otak-jinro-workers.systemexe-research-and-development.workers.dev
-          NEXT_PUBLIC_WS_URL: wss://otak-jinro-workers.systemexe-research-and-development.workers.dev
+          NEXT_PUBLIC_WORKERS_URL: https://otak-jinro-workers.tsuyoshi-otake.workers.dev
+          NEXT_PUBLIC_WS_URL: wss://otak-jinro-workers.tsuyoshi-otake.workers.dev
 
       - name: Create .nojekyll file
         run: touch packages/frontend/out/.nojekyll

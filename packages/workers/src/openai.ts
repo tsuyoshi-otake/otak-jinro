@@ -310,9 +310,9 @@ export class OpenAIService {
       return null;
     }
 
-    // 発言頻度の制御 - 最低10秒間隔
+    // 発言頻度の制御 - 最低5秒間隔（頻度向上）
     const timeSinceLastMessage = Date.now() - (player.lastMessageTime || 0);
-    const minInterval = 10000; // 10秒
+    const minInterval = 5000; // 5秒
 
     if (timeSinceLastMessage < minInterval) {
       console.log(`[OpenAI] ${player.name} spoke too recently (${timeSinceLastMessage}ms ago), skipping`);
@@ -659,7 +659,7 @@ ${currentVotes || '（まだ投票がありません）'}
    */
   private calculateSpeakProbability(player: any, gameState: any): number {
     const personality = player.aiPersonality;
-    let probability = 0.3; // ベース確率
+    let probability = 0.6; // ベース確率を0.3から0.6に向上
 
     // 性格タイプによる調整
     if (personality.personality === 'aggressive' || personality.personality === 'charismatic') {
@@ -687,12 +687,12 @@ ${currentVotes || '（まだ投票がありません）'}
 
     // 昼フェーズでは発言確率が高い
     if (gameState.phase === 'day') {
-      probability += 0.2;
+      probability += 0.3; // 0.2から0.3に向上
     }
 
     // 投票フェーズでは発言確率が低い
     if (gameState.phase === 'voting') {
-      probability -= 0.1;
+      probability -= 0.05; // -0.1から-0.05に緩和
     }
 
     // 最近の会話が活発な場合は発言確率を上げる
@@ -700,10 +700,15 @@ ${currentVotes || '（まだ投票がありません）'}
       Date.now() - msg.timestamp < 60000 // 1分以内
     );
     if (recentMessages.length > 5) {
-      probability += 0.1;
+      probability += 0.15; // 0.1から0.15に向上
     }
 
-    return Math.min(0.8, Math.max(0.2, probability));
+    // 会話が少ない場合は発言確率を大幅に上げる
+    if (recentMessages.length < 2) {
+      probability += 0.2;
+    }
+
+    return Math.min(0.9, Math.max(0.4, probability)); // 範囲を0.4-0.9に拡大
   }
 }
 
