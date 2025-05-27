@@ -15,7 +15,7 @@ export class OpenAIService {
   constructor(config: OpenAIServiceConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-    this.model = config.model || 'gpt-4.1';
+    this.model = config.model || 'gpt-4.1-nano';
   }
 
   /**
@@ -758,7 +758,7 @@ export function createOpenAIService(env: any): OpenAIService | null {
 
   const service = new OpenAIService({
     apiKey,
-    model: 'gpt-4.1'
+    model: 'gpt-4.1-nano'
   });
   
   // APIキーの検証
@@ -767,6 +767,6 @@ export function createOpenAIService(env: any): OpenAIService | null {
     return null;
   }
   
-  console.log('OpenAI service created successfully with GPT-4.1 model');
+  console.log('OpenAI service created successfully with GPT-4.1-nano model');
   return service;
 }
