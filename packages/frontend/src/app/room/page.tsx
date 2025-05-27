@@ -240,17 +240,19 @@ export default function RoomPage() {
           }
         }
 
-        ws.current.onclose = () => {
-          console.log('WebSocket接続終了')
+        ws.current.onclose = (event) => {
+          console.log('WebSocket接続終了:', event.code, event.reason)
           setIsConnected(false)
           setIsInitializing(false)
           
-          // 再接続試行
-          setTimeout(() => {
-            if (!isConnected) {
-              connectWebSocket()
-            }
-          }, 3000)
+          // 意図的な切断（1000: Normal Closure, 1001: Going Away）でない場合のみ再接続を試行
+          if (event.code !== 1000 && event.code !== 1001 && !event.wasClean) {
+            setTimeout(() => {
+              if (!isConnected) {
+                connectWebSocket()
+              }
+            }, 3000)
+          }
         }
 
         ws.current.onerror = (error) => {
@@ -267,8 +269,77 @@ export default function RoomPage() {
 
     // 100ms遅延後に接続開始
     const timer = setTimeout(connectWebSocket, 100)
-    return () => clearTimeout(timer)
+    
+    // クリーンアップ処理
+    return () => {
+      clearTimeout(timer)
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        // 退出メッセージを送信
+        ws.current.send(JSON.stringify({
+          type: 'leave_room',
+          roomId
+        }))
+        ws.current.close()
+      }
+    }
   }, [roomId, playerName])
+
+  // ページ離脱時のクリーンアップ処理
+  useEffect(() => {
+    const cleanupConnection = () => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        try {
+          // 退出メッセージを送信
+          ws.current.send(JSON.stringify({
+            type: 'leave_room',
+            roomId
+          }))
+          // 即座に接続を閉じる
+          ws.current.close(1000, 'User leaving')
+        } catch (error) {
+          console.log('WebSocket cleanup error:', error)
+          // エラーが発生しても強制的に閉じる
+          ws.current.close()
+        }
+      }
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      cleanupConnection()
+      // ブラウザによってはこれが必要
+      event.preventDefault()
+    }
+
+    const handleUnload = () => {
+      cleanupConnection()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        // ページが非表示になった時（タブ切り替えやブラウザ最小化）
+        cleanupConnection()
+      }
+    }
+
+    const handlePageHide = () => {
+      cleanupConnection()
+    }
+
+    // 複数のイベントリスナーを追加（ブラウザ間の互換性のため）
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('unload', handleUnload)
+    window.addEventListener('pagehide', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // クリーンアップ
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('unload', handleUnload)
+      window.removeEventListener('pagehide', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      cleanupConnection()
+    }
+  }, [roomId])
 
   // チャット自動スクロール（改善版）
   useEffect(() => {
